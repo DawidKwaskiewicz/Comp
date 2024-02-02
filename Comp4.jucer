@@ -4,6 +4,12 @@
               addUsingNamespaceToJuceHeader="0" displaySplashScreen="1" jucerFormatVersion="1"
               pluginFormats="buildVST3">
   <MAINGROUP id="LNlmCB" name="Comp4">
+    <GROUP id="{7BC037AF-746E-BA71-CCEE-BB50FB4F4846}" name="Resources">
+      <FILE id="XhFDb1" name="Speaker_Icon.svg.png" compile="0" resource="1"
+            file="Resources/Speaker_Icon.svg.png"/>
+      <FILE id="gVqsdU" name="Mute_Icon.svg.png" compile="0" resource="1"
+            file="Resources/Mute_Icon.svg.png"/>
+    </GROUP>
     <GROUP id="{857D350C-6093-F5D7-659A-6139E4FEC0AA}" name="Source">
       <FILE id="J0mVSH" name="SliderLookAndFeel.h" compile="0" resource="0"
             file="Source/SliderLookAndFeel.h"/>
@@ -18,27 +24,6 @@
   </MAINGROUP>
   <JUCEOPTIONS JUCE_STRICT_REFCOUNTEDPOINTER="1" JUCE_VST3_CAN_REPLACE_VST2="0"/>
   <EXPORTFORMATS>
-    <VS2019 targetFolder="Builds/VisualStudio2019">
-      <CONFIGURATIONS>
-        <CONFIGURATION isDebug="1" name="Debug" targetName="Comp4" enablePluginBinaryCopyStep="1"/>
-        <CONFIGURATION isDebug="0" name="Release" targetName="Comp4" enablePluginBinaryCopyStep="1"/>
-      </CONFIGURATIONS>
-      <MODULEPATHS>
-        <MODULEPATH id="juce_audio_basics" path="../../../../../../../../JUCE/modules"/>
-        <MODULEPATH id="juce_audio_devices" path="../../../../../../../../JUCE/modules"/>
-        <MODULEPATH id="juce_audio_formats" path="../../../../../../../../JUCE/modules"/>
-        <MODULEPATH id="juce_audio_plugin_client" path="../../../../../../../../JUCE/modules"/>
-        <MODULEPATH id="juce_audio_processors" path="../../../../../../../../JUCE/modules"/>
-        <MODULEPATH id="juce_audio_utils" path="../../../../../../../../JUCE/modules"/>
-        <MODULEPATH id="juce_core" path="../../../../../../../../JUCE/modules"/>
-        <MODULEPATH id="juce_data_structures" path="../../../../../../../../JUCE/modules"/>
-        <MODULEPATH id="juce_dsp" path="../../../../../../../../JUCE/modules"/>
-        <MODULEPATH id="juce_events" path="../../../../../../../../JUCE/modules"/>
-        <MODULEPATH id="juce_graphics" path="../../../../../../../../JUCE/modules"/>
-        <MODULEPATH id="juce_gui_basics" path="../../../../../../../../JUCE/modules"/>
-        <MODULEPATH id="juce_gui_extra" path="../../../../../../../../JUCE/modules"/>
-      </MODULEPATHS>
-    </VS2019>
     <VS2022 targetFolder="Builds/VisualStudio2022">
       <CONFIGURATIONS>
         <CONFIGURATION isDebug="1" name="Debug"/>
