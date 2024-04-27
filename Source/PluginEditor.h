@@ -60,29 +60,29 @@ private:
     //0 - sRatio
     //1 - sThresh
     //2 - sKnee
-    //3 - sInput
-    //4 - sOutput
+    //3 - sInput!!!
+    //4 - sOutput!!!
     //5 - sAttack
     //6 - sRelease
     //7 - sHold
     //8 - sLookAhead
-    //9 - sWindowLength
+    //9 - sRmsWindowLength!!!
     //10 - sSidechainGain
     //11 - sSidechainHP
     //12 - sSidechainLP
-    std::vector<std::string> names = { "Ratio", "Threshold", "Knee", "MUG", "Attack", "Release", "Hold", "Look-ahead", "Gain", "HPF", "LPF" };
-    std::vector<std::string> codeNames = { "sRatio", "sThresh", "sKnee", "sMUG", "sAttack", "sRelease", "sHold", "sLookAhead", "sSidechainGain", "sSidechainHP", "sSidechainLP" };
-    std::vector<std::string> tooltips = { "Ratio", "Threshold", "Knee", "Make-up gain", "Attack", "Release", "Hold", "Look-ahead",
-        "Sidechain input gain", "High-pass filter cutoff frequency", "Low-pass filter cutoff frequency" };
-    std::vector<int> indicesX = { 0, 1, 2, 3, 0, 1, 2, 3, 4, 4, 4 };
-    std::vector<int> indicesY = { 0, 0, 0, 0, 1, 1, 1, 1, 2, 3, 4 };
-    std::vector<double> mins = { 0.01, -60.0, 0.0, -24.0, 0.0, 0.0, 0.0, 0.0, -24.0, 20.0, 20.0 };
-    std::vector<double> maxs = { 30.0, 0.0, 12.0, 24.0, 500.0, 1000.0, 1000.0, 500.0, 24.0, 20000.0, 20000.0 };
-    std::vector<double> mids = { 1.0, -12.0, 3.0, 0.0, 10.0, 50.0, 50.0, 10.0, 0.0, 1000.0, 1000.0 };
-    std::vector<double> starts = { 1.0, 0.0, 3.0, 0.0, 10.0, 50.0, 0.0, 0.0, 0.0, 20.0, 20000.0 };
-    std::vector<double> steps = { 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 1.0, 1.0};
-    std::vector<std::string> suffixes = { "", " dB", " dB", " dB", " ms", " ms", " ms", " ms", " dB", " Hz", " Hz"};
-    int mainSlidersCount = 8;
+    std::vector<std::string> names = { "Ratio", "Threshold", "Knee", "Input", "Output", "Attack", "Release", "Hold", "Look-ahead", "RMS", "Gain", "HPF", "LPF"};
+    std::vector<std::string> codeNames = { "sRatio", "sThresh", "sKnee", "sInput", "sOutput", "sAttack", "sRelease", "sHold", "sLookAhead", "sRmsWindowLength", "sSidechainGain", "sSidechainHP", "sSidechainLP"};
+    std::vector<std::string> tooltips = { "Ratio", "Threshold", "Knee", "Input gain", "Output gain", "Attack", "Release", "Hold", "Look-ahead", "RMS window length",
+        "Sidechain input gain", "High-pass filter cutoff frequency", "Low-pass filter cutoff frequency"};
+    std::vector<int> indicesX = { 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 5, 5, 5 };
+    std::vector<int> indicesY = { 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 3, 4 };
+    std::vector<double> mins = { 0.01, -60.0, 0.0, -24.0, -24.0, 0.0, 0.0, 0.0, 0.0, 0.0, -24.0, 20.0, 20.0 };
+    std::vector<double> maxs = { 30.0, 0.0, 12.0, 24.0, 24.0, 500.0, 1000.0, 1000.0, 500.0, 100.0, 24.0, 20000.0, 20000.0 };
+    std::vector<double> mids = { 1.0, -12.0, 3.0, 0.0, 0.0, 10.0, 50.0, 50.0, 10.0, 1.0, 0.0, 1000.0, 1000.0 };
+    std::vector<double> starts = { 1.0, 0.0, 3.0, 0.0, 0.0, 10.0, 50.0, 0.0, 0.0, 1.0, 0.0, 20.0, 20000.0 };
+    std::vector<double> steps = { 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.001, 0.01, 1.0, 1.0};
+    std::vector<std::string> suffixes = { "", " dB", " dB", " dB", " dB", " ms", " ms", " ms", " ms", " ms", " dB", " Hz", " Hz"};
+    int mainSlidersCount = 10;
     //std::vector<juce::Label*> labels;
     //std::vector<juce::Label*> labelsGridX;
     //std::vector<juce::Label*> labelsGridY;
@@ -120,6 +120,7 @@ private:
 
     int callbackCounter = 0;
     std::vector<int> barCountDiff;
+    int newSliderShiftTmp = 70;
 
     juce::Path compLine;
 

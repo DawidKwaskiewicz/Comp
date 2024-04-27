@@ -30,11 +30,13 @@ Comp4AudioProcessor::Comp4AudioProcessor()
     ratio = 1.0;
     thresh = 0.0;
     knee = 3.0;
-    mug = 0.0;
+    inputGain = 0.0;
+    outputGain = 0.0;
     attack = 10.0;
     release = 50.0;
     hold = 0.0;
     lookAhead = 0.0;
+    rmsWindowLength = 1.0;
     sidechainInputGain = 0.0;
     sidechainHP = 20.0;
     sidechainLP = 20000.0;
@@ -42,17 +44,19 @@ Comp4AudioProcessor::Comp4AudioProcessor()
     sidechainEnable = false;
     sidechainListen = false;
     sidechainMuteInput = false;
-    previousInputGain = 0.0;
-    previousSidechainGain = 0.0;
+    //previousInputGain = 0.0;
+    //previousSidechainGain = 0.0;
     double sr = 44100.0;
     attackSamples = attack * sr * 0.001;
     releaseSamples = release * sr * 0.001;
     holdSamples = hold * sr * 0.001;
     lookAheadSamples = lookAhead * sr * 0.001;
+    rmsWindowSamples = rmsWindowLength * sr * 0.001;
     attackSamplesLeft = attackSamples;
     releaseSamplesLeft = releaseSamples;
     holdSamplesLeft = holdSamples;
     lookAheadSamplesLeft = lookAheadSamples;
+    rmsWindowSamplesLeft = rmsWindowSamples;
     compressionEngaged = false;
     prevValue = 0.0f;
     bezierRatio = 1.0;
@@ -230,8 +234,8 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     //double xknee1 = Comp4DecibelsToAmplitude(thresh - knee / 2.0);
     //double xknee2 = Comp4DecibelsToAmplitude(thresh + knee / 2.0);
-    double gain = Comp4DecibelsToAmplitude(mug);
-    double sidechainGain = Comp4DecibelsToAmplitude(sidechainInputGain);
+    double outputGainLin = Comp4DecibelsToAmplitude(outputGain);
+    double sidechainGainLin = Comp4DecibelsToAmplitude(sidechainInputGain);
     attackSamples = std::round(attack * getSampleRate() * 0.001);
     releaseSamples = std::round(release * getSampleRate() * 0.001);
     holdSamples = std::round(hold * getSampleRate() * 0.001);
@@ -256,7 +260,7 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         //}
         for (int channel = 0; channel < 2; ++channel)
         {
-            channelsData[channel + 2][smp] *= sidechainGain;
+            channelsData[channel + 2][smp] *= sidechainGainLin;
             s = &channelsData[channel][smp];
             sdb = Comp4AmplitudeToDecibels(*s);
             sdbkey = sidechainEnable ? Comp4AmplitudeToDecibels(channelsData[channel + 2][smp]) : sdb;
@@ -376,7 +380,7 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             if (sidechainMuteInput) channelsData[channel][smp] = 0;
             if (sidechainListen) channelsData[channel][smp] += channelsData[channel + 2][smp];
 
-            *s *= gain;
+            *s *= outputGainLin;
         }
     }
 

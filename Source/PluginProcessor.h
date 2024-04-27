@@ -56,11 +56,11 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    double ratio, thresh, knee, mug, attack, release, hold, lookAhead, sidechainInputGain, sidechainHP, sidechainLP;
+    double ratio, thresh, knee, inputGain, outputGain, attack, release, hold, lookAhead, rmsWindowLength, sidechainInputGain, sidechainHP, sidechainLP;
     bool downward, sidechainEnable, sidechainListen, sidechainMuteInput;
     double previousInputGain, previousSidechainGain;
-    double attackSamples, releaseSamples, holdSamples, lookAheadSamples;
-    double attackSamplesLeft, releaseSamplesLeft, holdSamplesLeft, lookAheadSamplesLeft;
+    double attackSamples, releaseSamples, holdSamples, lookAheadSamples, rmsWindowSamples;
+    double attackSamplesLeft, releaseSamplesLeft, holdSamplesLeft, lookAheadSamplesLeft, rmsWindowSamplesLeft;
     bool compressionEngaged;
     float prevValue;
     double attacka, attackb, releasea, releaseb;
