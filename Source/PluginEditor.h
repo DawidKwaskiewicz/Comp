@@ -37,13 +37,41 @@ private:
     juce::ToggleButton bUpward, bDownward;
     juce::TextButton bSidechainEnable, bSidechainMuteInput;
     juce::ImageButton bSidechainListen;
-    juce::Slider sRatio, sThresh, sKnee, sMUG;
-    juce::Slider sAttack, sRelease, sHold, sLookAhead;
-    juce::Slider sSidechainGain, sSidechainHP, sSidechainLP;
-    std::vector<juce::Slider*> sliders = { &sRatio, &sThresh, &sKnee, &sMUG,
-        &sAttack, &sRelease, &sHold, &sLookAhead,
-        &sSidechainGain, &sSidechainHP, &sSidechainLP };
+    //juce::Slider sRatio, sThresh, sKnee, sMUG;
+    //juce::Slider sAttack, sRelease, sHold, sLookAhead;
+    //juce::Slider sSidechainGain, sSidechainHP, sSidechainLP;
+    //std::vector<juce::Slider*> sliders = { &sRatio, &sThresh, &sKnee, &sMUG,
+    //    &sAttack, &sRelease, &sHold, &sLookAhead,
+    //    &sSidechainGain, &sSidechainHP, &sSidechainLP };
+    juce::OwnedArray<juce::Slider> sliders;
+    //  OLD
+    //0 - sRatio
+    //1 - sThresh
+    //2 - sKnee
+    //3 - sMUG
+    //4 - sAttack
+    //5 - sRelease
+    //6 - sHold
+    //7 - sLookAhead
+    //8 - sSidechainGain
+    //9 - sSidechainHP
+    //10 - sSidechainLP
+    //  NEW
+    //0 - sRatio
+    //1 - sThresh
+    //2 - sKnee
+    //3 - sInput
+    //4 - sOutput
+    //5 - sAttack
+    //6 - sRelease
+    //7 - sHold
+    //8 - sLookAhead
+    //9 - sWindowLength
+    //10 - sSidechainGain
+    //11 - sSidechainHP
+    //12 - sSidechainLP
     std::vector<std::string> names = { "Ratio", "Threshold", "Knee", "MUG", "Attack", "Release", "Hold", "Look-ahead", "Gain", "HPF", "LPF" };
+    std::vector<std::string> codeNames = { "sRatio", "sThresh", "sKnee", "sMUG", "sAttack", "sRelease", "sHold", "sLookAhead", "sSidechainGain", "sSidechainHP", "sSidechainLP" };
     std::vector<std::string> tooltips = { "Ratio", "Threshold", "Knee", "Make-up gain", "Attack", "Release", "Hold", "Look-ahead",
         "Sidechain input gain", "High-pass filter cutoff frequency", "Low-pass filter cutoff frequency" };
     std::vector<int> indicesX = { 0, 1, 2, 3, 0, 1, 2, 3, 4, 4, 4 };
@@ -55,17 +83,33 @@ private:
     std::vector<double> steps = { 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 1.0, 1.0};
     std::vector<std::string> suffixes = { "", " dB", " dB", " dB", " ms", " ms", " ms", " ms", " dB", " Hz", " Hz"};
     int mainSlidersCount = 8;
-    std::vector<juce::Label*> labels;
-    std::vector<juce::Label*> labelsGridX;
-    std::vector<juce::Label*> labelsGridY;
+    //std::vector<juce::Label*> labels;
+    //std::vector<juce::Label*> labelsGridX;
+    //std::vector<juce::Label*> labelsGridY;
+    juce::OwnedArray<juce::Label> labels;
+    juce::OwnedArray<juce::Label> labelsGridX;
+    juce::OwnedArray<juce::Label> labelsGridY;
     std::vector<std::string> gridSteps = { "-12", "-24", "-36", "-48" };
     float labelGridFont = 13.0f;
 
-    juce::Slider sInputL, sInputR, sSidechainL, sSidechainR, sOutputL, sOutputR, sGainL, sGainR;
-    std::vector<juce::Slider*> bars = { &sInputL, &sInputR, &sSidechainL, &sSidechainR, &sOutputL, &sOutputR, &sGainL, &sGainR };
-    std::vector<juce::Label*> barLabels;
-    std::vector<juce::Label*> bar1GridLabels;
-    std::vector<juce::Label*> bar2GridLabels;
+    //juce::Slider sInputL, sInputR, sSidechainL, sSidechainR, sOutputL, sOutputR, sGainL, sGainR;
+    //std::vector<juce::Slider*> bars = { &sInputL, &sInputR, &sSidechainL, &sSidechainR, &sOutputL, &sOutputR, &sGainL, &sGainR };
+    //std::vector<juce::Label*> barLabels;
+    //std::vector<juce::Label*> bar1GridLabels;
+    //std::vector<juce::Label*> bar2GridLabels;
+    juce::OwnedArray<juce::Slider> bars;
+    std::vector<std::string> barsCodeNames = { "sInputL", "sInputR", "sSidechainL", "sSidechainR", "sOutputL", "sOutputR", "sGainL", "sGainR" };
+    //0 - sInputL
+    //1 - sInputR
+    //2 - sSidechainL
+    //3 - sSidechainR
+    //4 - sOutputL
+    //5 - sOutputR
+    //6 - sGainL
+    //7 - sGainR
+    juce::OwnedArray<juce::Label> barLabels;
+    juce::OwnedArray<juce::Label> bar1GridLabels;
+    juce::OwnedArray<juce::Label> bar2GridLabels;
     std::vector<std::string> bar1GridSteps = { "0", "-12", "-24", "-36", "-48", "-60" };
     //std::vector<std::string> bar2GridSteps = { "0", "-6", "-12", "-18", "-24", "-30" };
     //std::vector<std::string> bar2GridSteps = { "15", "9", "3", "-3", "-9", "-15" };
@@ -73,6 +117,9 @@ private:
     std::vector<int> barTypes = { 1, 1, 1, 1, 1, 1, 2, 2 };
     float barLabelGridFont = 11.0f;
     int barTimerIntervalms = 40;
+
+    int callbackCounter = 0;
+    std::vector<int> barCountDiff;
 
     juce::Path compLine;
 
@@ -95,8 +142,10 @@ private:
     void timerCallback() override;
     void Comp4SetMainSlider(juce::Slider* slider, int indexX, int indexY, double min, double max, double mid, double start, double step, std::string suffix);
     void Comp4SetBar(juce::Slider* slider, int type);
-    double Comp4SignaltoRMSdb(std::vector<double> signal);
+    double Comp4SignaltoRMSdb(std::vector<double>& signal);
     double Comp4Signaltodb(double signal);
+
+    //int debugCurrentFunctionIndex = 0;
 
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Comp4AudioProcessorEditor)

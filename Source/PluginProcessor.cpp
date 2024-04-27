@@ -25,6 +25,7 @@ Comp4AudioProcessor::Comp4AudioProcessor()
 {
     //vec1.push_back(1.0f);
     //currentValues.push_back(vec1);
+    debugCurrentFunctionIndexProcessor = 1;
 
     ratio = 1.0;
     thresh = 0.0;
@@ -129,6 +130,7 @@ void Comp4AudioProcessor::changeProgramName (int index, const juce::String& newN
 //==============================================================================
 void Comp4AudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    debugCurrentFunctionIndexProcessor = 2;
     // Use this method as the place to do any pre-playback
     // initialisation that you need..
     juce::dsp::ProcessSpec psp;
@@ -198,6 +200,7 @@ bool Comp4AudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) co
 
 void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
+    debugCurrentFunctionIndexProcessor = 3;
     juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
@@ -352,13 +355,16 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             *s = *s >= 0 ? Comp4DecibelsToAmplitude(currentThresh + (sdb - currentThresh) / currentRatio) :
                 -1.0 * Comp4DecibelsToAmplitude(currentThresh + (sdb - currentThresh) / currentRatio);
 
+            if (windowOpen)
+            {
+                currentValues[channel].push_back(originalValues[channel]);
+                currentValues[channel + 2].push_back(channelsData[channel + 2][smp]);
+                currentValues[channel + 4].push_back(channelsData[channel][smp]);
+            }
 
-            currentValues[channel].push_back(originalValues[channel]);
             //if (smp % 100 == 0) DBG(currentValues[channel][smp] - originalValues[channel]);
             //if (smp % 100 == 0) DBG(channel);
-            currentValues[channel + 2].push_back(channelsData[channel + 2][smp]);
 
-            currentValues[channel + 4].push_back(channelsData[channel][smp]);
             //currentValues[channel + 6].push_back(channelsData[channel][smp] - originalValues[channel]);
             //if (sidechainMuteInput) channelsData[channel][smp] = 0;
             //if (sidechainListen) channelsData[channel][smp] += channelsData[channel + 2][smp];
@@ -417,11 +423,13 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 
 double Comp4AudioProcessor::Comp4DecibelsToAmplitude(double decibelValue)
 {
+    debugCurrentFunctionIndexProcessor = 4;
     return std::pow(10.0, decibelValue / 20.0);
 }
 
 double Comp4AudioProcessor::Comp4GetBezier(float input)
 {
+    debugCurrentFunctionIndexProcessor = 5;
     double t = (thresh - knee - Comp4AmplitudeToDecibels(input)) / (-2.0 * knee);
     double y1, y2, y3, y;
     y2 = thresh;
@@ -443,12 +451,14 @@ double Comp4AudioProcessor::Comp4GetBezier(float input)
 
 double Comp4AudioProcessor::Comp4GetRatiod(float input)
 {
+    debugCurrentFunctionIndexProcessor = 6;
     if (input >= 0.0f) return std::pow(10.0, (thresh + (Comp4AmplitudeToDecibels(input) - thresh) / ratio) / 20.0);
     return -1.0f * std::pow(10.0, (thresh + (Comp4AmplitudeToDecibels(input) - thresh) / ratio) / 20.0);
 }
 
 double Comp4AudioProcessor::Comp4GetBezierdb(double inputdb)
 {
+    debugCurrentFunctionIndexProcessor = 7;
     double x1 = thresh - knee;
     double x2 = thresh;
     double x3 = thresh + knee;
@@ -479,15 +489,18 @@ double Comp4AudioProcessor::Comp4GetBezierdb(double inputdb)
 
 double Comp4AudioProcessor::Comp4GetRatioddb(double inputdb)
 {
+    debugCurrentFunctionIndexProcessor = 8;
     return thresh + (inputdb - thresh) / ratio;
 }
 
 double Comp4AudioProcessor::Comp4AmplitudeToDecibels(float signal)
 {
+    debugCurrentFunctionIndexProcessor = 9;
     return 20.0 * std::log10(std::abs(signal));
 }
 void Comp4AudioProcessor::Comp4EngageCompression()
 {
+    debugCurrentFunctionIndexProcessor = 10;
     attackSamplesLeft = attackSamples;
     compressionEngaged = true;
     return;
@@ -495,6 +508,7 @@ void Comp4AudioProcessor::Comp4EngageCompression()
 
 void Comp4AudioProcessor::Comp4DisengageCompression()
 {
+    debugCurrentFunctionIndexProcessor = 11;
     releaseSamplesLeft = releaseSamples;
     holdSamplesLeft = holdSamples;
     compressionEngaged = false;
@@ -503,6 +517,7 @@ void Comp4AudioProcessor::Comp4DisengageCompression()
 
 void Comp4AudioProcessor::Comp4UpdateBezier(double inputdb)
 {
+    debugCurrentFunctionIndexProcessor = 12;
     double x1 = thresh - knee;
     double x2 = thresh;
     double x3 = thresh + knee;

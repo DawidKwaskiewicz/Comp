@@ -75,6 +75,10 @@ public:
     double originalValues[2];
     double sdb, sdbkey;
     float* s;
+    bool windowOpen = false;
+
+    int debugCurrentFunctionIndexEditor = 0;
+    int debugCurrentFunctionIndexProcessor = 0;
 
 private:
     //==============================================================================

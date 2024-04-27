@@ -15,6 +15,10 @@
 Comp4AudioProcessorEditor::Comp4AudioProcessorEditor (Comp4AudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
+    //std::cout << "Comp4AudioProcessorEditor\n";
+    //debugCurrentFunctionIndex = 1;
+    p.debugCurrentFunctionIndexEditor = 1;
+    audioProcessor.windowOpen = true;
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
 
@@ -25,10 +29,11 @@ Comp4AudioProcessorEditor::Comp4AudioProcessorEditor (Comp4AudioProcessor& p)
     //Comp4SetMainSlider(&sRatio, 0, 1, 0.0, 30.0, 3.0, 1.0, "");
 
     //for (int i = 0; i < mainSlidersCount; i++)
-    for (int i = 0; i < sliders.size(); i++)
+    for (int i = 0; i < indicesX.size(); i++)
     {
+        sliders.add(new juce::Slider(codeNames[i]));
         Comp4SetMainSlider(sliders[i], indicesX[i], indicesY[i], mins[i], maxs[i], mids[i], starts[i], steps[i], suffixes[i]);
-        labels.push_back(new juce::Label({}, names[i]));
+        labels.add(new juce::Label({}, names[i]));
         labels[i]->setJustificationType(juce::Justification::centredBottom);
         if (i == 3 || i == 8 || i == 9 || i == 10)
             labels[i]->setTooltip(tooltips[i]);
@@ -40,6 +45,15 @@ Comp4AudioProcessorEditor::Comp4AudioProcessorEditor (Comp4AudioProcessor& p)
         else labels[i]->attachToComponent(sliders[i], false);
         this->addAndMakeVisible(labels[i]);
     }
+    
+    //0 - sInputL
+    //1 - sInputR
+    //2 - sSidechainL
+    //3 - sSidechainR
+    //4 - sOutputL
+    //5 - sOutputR
+    //6 - sGainL
+    //7 - sGainR
 
     bUpward.setButtonText("Upward processing");
     bUpward.setToggleState(true, juce::sendNotification);
@@ -81,8 +95,9 @@ Comp4AudioProcessorEditor::Comp4AudioProcessorEditor (Comp4AudioProcessor& p)
     bSidechainListen.onClick = [this] {Comp4AudioProcessorEditor::onStateSwitch(); };
 
 
-    for (int i = 0; i < bars.size(); i++)
+    for (int i = 0; i < barsCodeNames.size(); i++)
     {
+        bars.add(new juce::Slider(barsCodeNames[i]));
         Comp4SetBar(bars[i], barTypes[i]);
     }
 
@@ -92,12 +107,19 @@ Comp4AudioProcessorEditor::Comp4AudioProcessorEditor (Comp4AudioProcessor& p)
 
 Comp4AudioProcessorEditor::~Comp4AudioProcessorEditor()
 {
+    //std::cout << "~Comp4AudioProcessorEditor\n";
+    //debugCurrentFunctionIndex = 2;
+    //audioProcessor.debugCurrentFunctionIndexEditor = 2;
     Timer::stopTimer();
+    audioProcessor.windowOpen = false;
 }
 
 //==============================================================================
 void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
 {
+    //std::cout << "paint\n";
+    //debugCurrentFunctionIndex = 3;
+    audioProcessor.debugCurrentFunctionIndexEditor = 3;
     // (Our component is opaque, so we must completely fill the background with a solid colour)
     g.fillAll (getLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId));
 
@@ -108,7 +130,7 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
     for (int i = 1; i < 5; i++)
     {
         g.drawLine(juce::Line<float>(juce::Point<float>(0, i * 80), juce::Point<float>(400, i * 80)), 1.0f);
-        labelsGridX.push_back(new juce::Label({}, gridSteps[i - 1]));
+        labelsGridX.add(new juce::Label({}, gridSteps[i - 1]));
         labelsGridX[i - 1]->setBounds(0, i * 80 - 15, 30, 10);
         labelsGridX[i - 1]->setColour(juce::Label::textColourId, cLabelGridText);
         labelsGridX[i - 1]->setFont(labelGridFont);
@@ -116,7 +138,7 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
         if (i != 4)
         {
             g.drawLine(juce::Line<float>(juce::Point<float>(i * 80, 0), juce::Point<float>(i * 80, 400)), 1.0f);
-            labelsGridY.push_back(new juce::Label({}, gridSteps[gridSteps.size() - i]));
+            labelsGridY.add(new juce::Label({}, gridSteps[gridSteps.size() - i]));
             labelsGridY[i - 1]->setBounds(i * 80 - 29, 385, 30, 10);
             labelsGridY[i - 1]->setColour(juce::Label::textColourId, cLabelGridText);
             labelsGridY[i - 1]->setFont(labelGridFont);
@@ -125,7 +147,7 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
         else
         {
             g.drawLine(juce::Line<float>(juce::Point<float>(i * 80, 0), juce::Point<float>(i * 80, 319)), 1.0f);
-            labelsGridY.push_back(new juce::Label({}, gridSteps[gridSteps.size() - i]));
+            labelsGridY.add(new juce::Label({}, gridSteps[gridSteps.size() - i]));
             labelsGridY[i - 1]->setBounds(i * 80 - 29, 305, 30, 10);
             labelsGridY[i - 1]->setColour(juce::Label::textColourId, cLabelGridText);
             labelsGridY[i - 1]->setFont(labelGridFont);
@@ -142,14 +164,14 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
     double endY = 580.0;
     for (int i = 0; i < bar1GridSteps.size(); i++)
     {
-        bar1GridLabels.push_back(new juce::Label({}, bar1GridSteps[i]));
+        bar1GridLabels.add(new juce::Label({}, bar1GridSteps[i]));
         bar1GridLabels[i]->setBounds(400 + xOffset, std::round(startY + i * (endY - startY) / (bar1GridSteps.size() - 1.0)), barGridLabelWidth, barGridLabelHeight);
         bar1GridLabels[i]->setColour(juce::Label::textColourId, cBarsGridLabels);
         bar1GridLabels[i]->setFont(barLabelGridFont);
         bar1GridLabels[i]->setJustificationType(juce::Justification::centredRight);
         this->addAndMakeVisible(bar1GridLabels[i]);
 
-        bar2GridLabels.push_back(new juce::Label({}, bar2GridSteps[i]));
+        bar2GridLabels.add(new juce::Label({}, bar2GridSteps[i]));
         bar2GridLabels[i]->setBounds(600 - xOffset - barGridLabelWidth + 2, std::round(startY + i * (endY - startY) / (bar2GridSteps.size() - 1.0)), barGridLabelWidth, barGridLabelHeight);
         bar2GridLabels[i]->setColour(juce::Label::textColourId, cBarsGridLabels);
         bar2GridLabels[i]->setFont(barLabelGridFont);
@@ -158,15 +180,15 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
     }
 
     g.setColour(cOutlines);
-    g.drawFittedText("In", sInputL.getX(), 10, 30, 20, juce::Justification::centred, 1);
-    g.drawFittedText("Side", sSidechainL.getX(), 10, 30, 20, juce::Justification::centred, 1);
-    g.drawFittedText("Out", sOutputL.getX(), 10, 30, 20, juce::Justification::centred, 1);
-    g.drawFittedText("Gain", sGainL.getX(), 10, 30, 20, juce::Justification::centred, 1);
+    g.drawFittedText("In", bars[0]->getX(), 10, 30, 20, juce::Justification::centred, 1);
+    g.drawFittedText("Side", bars[2]->getX(), 10, 30, 20, juce::Justification::centred, 1);
+    g.drawFittedText("Out", bars[4]->getX(), 10, 30, 20, juce::Justification::centred, 1);
+    g.drawFittedText("Gain", bars[6]->getX(), 10, 30, 20, juce::Justification::centred, 1);
 
 
     // threshold line
     g.setColour(cThreshLine);
-    int threshLineHeight = std::round(-1.0 * sThresh.getValue() / 60.0 * 400.0);
+    int threshLineHeight = std::round(-1.0 * sliders[1]->getValue() / 60.0 * 400.0);
     g.drawLine(juce::Line<float>(juce::Point<float>(0, threshLineHeight), juce::Point<float>(400, threshLineHeight)), 1.0f);
 
     // comp line
@@ -175,12 +197,12 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
     g.setColour(cCompLine);
     compLine.clear();
     float x1, y1, x2, y2, x3, y3, x4, y4;
-    double thresh = -1.0 * sThresh.getValue() / 60.0 * 400.0;
+    double thresh = -1.0 * sliders[1]->getValue() / 60.0 * 400.0;
 
     if (bDownward.getToggleState())
     {
-        x1 = std::max(400.0 - thresh - (400.0 - thresh) * sRatio.getValue(), 0.0);
-        y1 = std::min(thresh + (400.0 - thresh) / sRatio.getValue(), 400.0);
+        x1 = std::max(400.0 - thresh - (400.0 - thresh) * sliders[0]->getValue(), 0.0);
+        y1 = std::min(thresh + (400.0 - thresh) / sliders[0]->getValue(), 400.0);
         x4 = 400.0f;
         y4 = 0.0f;
     }
@@ -188,10 +210,10 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
     {
         x1 = 0.0f;
         y1 = 400.0f;
-        x4 = std::min(400 - thresh + thresh * sRatio.getValue(), 400.0);
-        y4 = std::max(thresh - thresh / sRatio.getValue(), 0.0);
+        x4 = std::min(400 - thresh + thresh * sliders[0]->getValue(), 400.0);
+        y4 = std::max(thresh - thresh / sliders[0]->getValue(), 0.0);
     }
-    double knee = sKnee.getValue() / 60.0 * 400.0;
+    double knee = sliders[2]->getValue() / 60.0 * 400.0;
     x2 = 400 - thresh - knee / 2;
     x3 = 400 - thresh + knee / 2;
     //y2 = thresh + (thresh - x2) / thresh * (400 - thresh);
@@ -233,6 +255,9 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
 
 void Comp4AudioProcessorEditor::resized()
 {
+    //std::cout << "resized\n";
+    //debugCurrentFunctionIndex = 4;
+    audioProcessor.debugCurrentFunctionIndexEditor = 4;
     /*juce::LookAndFeel_V4 lf;
     juce::Slider::SliderLayout *layout = &lf.getSliderLayout(sRatio);*/
     //SliderLookAndFeel slf;
@@ -274,34 +299,40 @@ void Comp4AudioProcessorEditor::resized()
     int bigBreak = 8;
     int biggerBreak = 12;
     int xOffset = 28;
-    sInputL.setBounds(400 + xOffset, 30, barWidth, 560);
-    sInputR.setBounds(400 + xOffset + barWidth + smallBreak, 30, barWidth, 560);
-    sSidechainL.setBounds(400 + xOffset + barWidth * 2 + smallBreak + bigBreak, 30, barWidth, 560);
-    sSidechainR.setBounds(400 + xOffset + barWidth * 3 + smallBreak * 2 + bigBreak, 30, barWidth, 560);
-    sOutputL.setBounds(400 + xOffset + barWidth * 4 + smallBreak * 2 + bigBreak * 2, 30, barWidth, 560);
-    sOutputR.setBounds(400 + xOffset + barWidth * 5 + smallBreak * 3 + bigBreak * 2, 30, barWidth, 560);
-    sGainL.setBounds(400 + xOffset + barWidth * 6 + smallBreak * 3 + bigBreak * 2 + biggerBreak, 30, barWidth, 560);
-    sGainR.setBounds(400 + xOffset + barWidth * 7 + smallBreak * 4 + bigBreak * 2 + biggerBreak, 30, barWidth, 560);
+    bars[0]->setBounds(400 + xOffset, 30, barWidth, 560);
+    bars[1]->setBounds(400 + xOffset + barWidth + smallBreak, 30, barWidth, 560);
+    bars[2]->setBounds(400 + xOffset + barWidth * 2 + smallBreak + bigBreak, 30, barWidth, 560);
+    bars[3]->setBounds(400 + xOffset + barWidth * 3 + smallBreak * 2 + bigBreak, 30, barWidth, 560);
+    bars[4]->setBounds(400 + xOffset + barWidth * 4 + smallBreak * 2 + bigBreak * 2, 30, barWidth, 560);
+    bars[5]->setBounds(400 + xOffset + barWidth * 5 + smallBreak * 3 + bigBreak * 2, 30, barWidth, 560);
+    bars[6]->setBounds(400 + xOffset + barWidth * 6 + smallBreak * 3 + bigBreak * 2 + biggerBreak, 30, barWidth, 560);
+    bars[7]->setBounds(400 + xOffset + barWidth * 7 + smallBreak * 4 + bigBreak * 2 + biggerBreak, 30, barWidth, 560);
 }
 
 void Comp4AudioProcessorEditor::sliderValueChanged(juce::Slider* slider)
 {
-    audioProcessor.ratio = sRatio.getValue();
-    audioProcessor.thresh = sThresh.getValue();
-    audioProcessor.knee = sKnee.getValue();
-    audioProcessor.mug = sMUG.getValue();
-    audioProcessor.attack = sAttack.getValue();
-    audioProcessor.release = sRelease.getValue();
-    audioProcessor.hold = sHold.getValue();
-    audioProcessor.lookAhead = sLookAhead.getValue();
-    audioProcessor.sidechainInputGain = sSidechainGain.getValue();
-    audioProcessor.sidechainHP = sSidechainHP.getValue();
-    audioProcessor.sidechainLP = sSidechainLP.getValue();
+    //std::cout << "sliderValueChanged\n";
+    //debugCurrentFunctionIndex = 5;
+    audioProcessor.debugCurrentFunctionIndexEditor = 5;
+    audioProcessor.ratio = sliders[0]->getValue();
+    audioProcessor.thresh = sliders[1]->getValue();
+    audioProcessor.knee = sliders[2]->getValue();
+    audioProcessor.mug = sliders[3]->getValue();
+    audioProcessor.attack = sliders[4]->getValue();
+    audioProcessor.release = sliders[5]->getValue();
+    audioProcessor.hold = sliders[6]->getValue();
+    audioProcessor.lookAhead = sliders[7]->getValue();
+    audioProcessor.sidechainInputGain = sliders[8]->getValue();
+    audioProcessor.sidechainHP = sliders[9]->getValue();
+    audioProcessor.sidechainLP = sliders[10]->getValue();
     //sRatio.setBounds(0, 425, 70, 75);
     repaint();
 }
 void Comp4AudioProcessorEditor::onStateSwitch()
 {
+    //std::cout << "onStateSwitch\n";
+    //debugCurrentFunctionIndex = 6;
+    audioProcessor.debugCurrentFunctionIndexEditor = 6;
     audioProcessor.downward = bDownward.getToggleState();
     audioProcessor.sidechainEnable = bSidechainEnable.getToggleState();
     audioProcessor.sidechainListen = bSidechainListen.getToggleState();
@@ -344,6 +375,9 @@ void Comp4AudioProcessorEditor::onStateSwitch()
 
 void Comp4AudioProcessorEditor::Comp4SetMainSlider(juce::Slider* slider, int indexX, int indexY, double min, double max, double mid, double start, double step, std::string suffix)
 {
+    //std::cout << "Comp4SetMainSlider\n";
+    //debugCurrentFunctionIndex = 7;
+    audioProcessor.debugCurrentFunctionIndexEditor = 7;
     //SliderLookAndFeel slf;
     slider->setColour(juce::Slider::textBoxBackgroundColourId, cSliderTextboxBackground);
     slider->setColour(juce::Slider::textBoxOutlineColourId, cSliderTextboxBackground);
@@ -366,6 +400,9 @@ void Comp4AudioProcessorEditor::Comp4SetMainSlider(juce::Slider* slider, int ind
 
 void Comp4AudioProcessorEditor::Comp4SetBar(juce::Slider* slider, int type)
 {
+    //std::cout << "Comp4SetBar\n";
+    //debugCurrentFunctionIndex = 8;
+    audioProcessor.debugCurrentFunctionIndexEditor = 8;
     double min = type == 1 ? -60.0 : -30.0;
     double max = type == 1 ? 0.0 : 30.0;
     double start = type == 1 ? -60.0 : 0.0;
@@ -395,19 +432,32 @@ void Comp4AudioProcessorEditor::Comp4SetBar(juce::Slider* slider, int type)
 
 void Comp4AudioProcessorEditor::timerCallback()
 {
+    callbackCounter++;
+    //std::cout << "timerCallback\n";
+    //debugCurrentFunctionIndex = 9;
+    audioProcessor.debugCurrentFunctionIndexEditor = 9;
     for (int i = 0; i < 6; i++)
     {
         //bars[i]->setValue(Comp4Signaltodb(audioProcessor.currentValuesOld[i]));
         //bars[i]->setValue(std::abs(audioProcessor.currentValuesOld[i]));
+
         bars[i]->setValue(Comp4SignaltoRMSdb(audioProcessor.currentValues[i]));
+
+        //double tmp = Comp4SignaltoRMSdb(audioProcessor.currentValues[i]);
+        //bars[i]->setValue(tmp);
+
         audioProcessor.currentValues[i].clear();
+        //if (i != 0) barCountDiff.push_back(audioProcessor.currentValues[i - 1].size());
     }
     bars[6]->setValue(bars[4]->getValue() - bars[0]->getValue());
     bars[7]->setValue(bars[5]->getValue() - bars[1]->getValue());
 }
 
-double Comp4AudioProcessorEditor::Comp4SignaltoRMSdb(std::vector<double> signal)
+double Comp4AudioProcessorEditor::Comp4SignaltoRMSdb(std::vector<double>& signal)
 {
+    //std::cout << "Comp4SignaltoRMSdb\n";
+    //debugCurrentFunctionIndex = 10;
+    audioProcessor.debugCurrentFunctionIndexEditor = 10;
     if (signal.empty()) return -60.0;
     double sum = 0;
     int elemCount = signal.size();
@@ -422,6 +472,9 @@ double Comp4AudioProcessorEditor::Comp4SignaltoRMSdb(std::vector<double> signal)
 
 double Comp4AudioProcessorEditor::Comp4Signaltodb(double signal)
 {
+    //std::cout << "Comp4Signaltodb\n";
+    //debugCurrentFunctionIndex = 11;
+    audioProcessor.debugCurrentFunctionIndexEditor = 11;
     return 20.0 * std::log10(std::abs(signal));
 }
 
