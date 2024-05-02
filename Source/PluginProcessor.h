@@ -56,17 +56,31 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    double ratio, thresh, knee, inputGain, outputGain, attack, release, hold, lookAhead, rmsWindowLength, sidechainInputGain, sidechainHP, sidechainLP;
+    // GUI sliders
+    double ratio, thresh, knee, inputGain, outputGain, attack, release, hold, lookAhead, rmsWindowLength, sidechainGain, sidechainHP, sidechainLP;
+    // GUI booleans
     bool downward, sidechainEnable, sidechainListen, sidechainMuteInput;
-    double previousInputGain, previousSidechainGain;
+    // previous gain values for each pair of channels, used for applying gain ramps to avoid clicks
+    double previousInputGain, previousSidechainGain, previousOutputGain;
+    // total number of samples for each timing parameter
     double attackSamples, releaseSamples, holdSamples, lookAheadSamples, rmsWindowSamples;
+    // number of samples left of the total - the value depletes as the ramp applied by attack time etc. nears its end
     double attackSamplesLeft, releaseSamplesLeft, holdSamplesLeft, lookAheadSamplesLeft, rmsWindowSamplesLeft;
+    // sum of squares of values in the current rms window
+    double rmsSquareSum;
+    // compression is engaged - last value crossed the compression threshold and attack samples (if any) have been deployed. if false, hold and then release samples are deployed and eventually compression stops
     bool compressionEngaged;
-    float prevValue;
-    double attacka, attackb, releasea, releaseb;
+    //float prevValue;
+    // need to figure out, i forgor
+    double attacka, releasea;
+    //double attackb, releaseb;
+    // compression ratio adjusted for bezier curves (for values that fall in the knee of the curve)
     double bezierRatio;
+    // compression threshold adjusted for bezier curves (for values that fall in the knee of the curve)
     double bezierThresh;
+    // compression ratio adjusted for bezier curves and timing variables (attack, hold, release)
     double currentRatio;
+    // compression threshold adjusted for bezier curves and timing variables (attack, hold, release)
     double currentThresh;
     //double currentValuesOld[6];
     std::vector<double> currentValues[6];
@@ -80,10 +94,12 @@ public:
     int debugCurrentFunctionIndexEditor = 0;
     int debugCurrentFunctionIndexProcessor = 0;
 
+    double Comp4DecibelsToAmplitude(double decibelValue);
+
 private:
     //==============================================================================
 
-    double Comp4DecibelsToAmplitude(double decibelValue);
+    //double Comp4DecibelsToAmplitude(double decibelValue);
     double Comp4GetBezier(float input);
     double Comp4GetRatiod(float input);
     double Comp4GetBezierdb(double input);

@@ -37,7 +37,7 @@ Comp4AudioProcessor::Comp4AudioProcessor()
     hold = 0.0;
     lookAhead = 0.0;
     rmsWindowLength = 1.0;
-    sidechainInputGain = 0.0;
+    sidechainGain = 0.0;
     sidechainHP = 20.0;
     sidechainLP = 20000.0;
     downward = false;
@@ -57,8 +57,9 @@ Comp4AudioProcessor::Comp4AudioProcessor()
     holdSamplesLeft = holdSamples;
     lookAheadSamplesLeft = lookAheadSamples;
     rmsWindowSamplesLeft = rmsWindowSamples;
+    rmsSquareSum = 0.0;
     compressionEngaged = false;
-    prevValue = 0.0f;
+    //prevValue = 0.0f;
     bezierRatio = 1.0;
     bezierThresh = 0.0;
     currentRatio = 1.0;
@@ -234,8 +235,15 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     //double xknee1 = Comp4DecibelsToAmplitude(thresh - knee / 2.0);
     //double xknee2 = Comp4DecibelsToAmplitude(thresh + knee / 2.0);
-    double outputGainLin = Comp4DecibelsToAmplitude(outputGain);
-    double sidechainGainLin = Comp4DecibelsToAmplitude(sidechainInputGain);
+    //double inputGainLin = Comp4DecibelsToAmplitude(inputGain);
+    buffer.applyGainRamp(0, 0, buffer.getNumSamples(), previousInputGain, inputGain);
+    buffer.applyGainRamp(1, 0, buffer.getNumSamples(), previousInputGain, inputGain);
+    previousInputGain = inputGain;
+    //double sidechainGainLin = Comp4DecibelsToAmplitude(sidechainInputGain);
+    buffer.applyGainRamp(2, 0, buffer.getNumSamples(), previousSidechainGain, sidechainGain);
+    buffer.applyGainRamp(3, 0, buffer.getNumSamples(), previousSidechainGain, sidechainGain);
+    previousSidechainGain = sidechainGain;
+    //double outputGainLin = Comp4DecibelsToAmplitude(outputGain);
     attackSamples = std::round(attack * getSampleRate() * 0.001);
     releaseSamples = std::round(release * getSampleRate() * 0.001);
     holdSamples = std::round(hold * getSampleRate() * 0.001);
@@ -260,7 +268,7 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         //}
         for (int channel = 0; channel < 2; ++channel)
         {
-            channelsData[channel + 2][smp] *= sidechainGainLin;
+            //channelsData[channel + 2][smp] *= sidechainGainLin;
             s = &channelsData[channel][smp];
             sdb = Comp4AmplitudeToDecibels(*s);
             sdbkey = sidechainEnable ? Comp4AmplitudeToDecibels(channelsData[channel + 2][smp]) : sdb;
@@ -293,6 +301,7 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                         if (attackSamplesLeft > 0)
                         {
                             Comp4UpdateBezier(sdb);
+                            //Comp4UpdateBezier(sdbkey);
                             attacka = (bezierRatio * attackSamples - bezierRatio) / (1.0 - bezierRatio);
                             currentRatio = attacka / (attackSamples - attackSamplesLeft + attacka);
                             attackSamplesLeft--;
@@ -336,6 +345,7 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                         if (attackSamplesLeft > 0)
                         {
                             Comp4UpdateBezier(sdb);
+                            //Comp4UpdateBezier(sdbkey);
                             attacka = (bezierRatio * attackSamples - bezierRatio) / (1 - bezierRatio);
                             currentRatio = attacka / (attackSamples - attackSamplesLeft + attacka);
                             attackSamplesLeft--;
@@ -380,9 +390,13 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             if (sidechainMuteInput) channelsData[channel][smp] = 0;
             if (sidechainListen) channelsData[channel][smp] += channelsData[channel + 2][smp];
 
-            *s *= outputGainLin;
+            //*s *= outputGainLin;
         }
     }
+
+    buffer.applyGainRamp(0, 0, buffer.getNumSamples(), previousOutputGain, outputGain);
+    buffer.applyGainRamp(1, 0, buffer.getNumSamples(), previousOutputGain, outputGain);
+    previousOutputGain = outputGain;
 
     //*hpf.state = *juce::dsp::IIR::Coefficients<float>::makeHighPass(getSampleRate(), sidechainHP);
     //*lpf.state = *juce::dsp::IIR::Coefficients<float>::makeLowPass(getSampleRate(), sidechainLP);
