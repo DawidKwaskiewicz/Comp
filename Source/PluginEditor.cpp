@@ -126,7 +126,8 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
 
     // graph layout
     g.setColour(cGraphBackground);
-    g.fillRect(0, 0, 470, 470);
+    int graphSideLength = 470;
+    g.fillRect(0, 0, graphSideLength, graphSideLength);
     //g.fillRect(0, 0, 400, 400);
     g.setColour(cGrid);
     /*for (int i = 1; i < 5; i++)
@@ -213,7 +214,7 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
     for (int i = 0; i < bar1GridSteps.size(); i++)
     {
         bar1GridLabels.add(new juce::Label({}, bar1GridSteps[i]));
-        bar1GridLabels[i]->setBounds(400 + newSliderShiftTmp + xOffset, std::round(startY + i * (endY - startY) / (bar1GridSteps.size() - 1.0)), barGridLabelWidth, barGridLabelHeight);
+        bar1GridLabels[i]->setBounds(graphSideLength + xOffset, std::round(startY + i * (endY - startY) / (bar1GridSteps.size() - 1.0)), barGridLabelWidth, barGridLabelHeight);
         bar1GridLabels[i]->setColour(juce::Label::textColourId, cBarsGridLabels);
         bar1GridLabels[i]->setFont(barLabelGridFont);
         bar1GridLabels[i]->setJustificationType(juce::Justification::centredRight);
@@ -236,7 +237,7 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
 
     // threshold line
     g.setColour(cThreshLine);
-    int threshLineHeight = std::round(-1.0 * sliders[1]->getValue() / 60.0 * 400.0);
+    int threshLineHeight = std::round(-1.0 * sliders[1]->getValue() / 60.0 * graphSideLength);
     g.drawLine(juce::Line<float>(juce::Point<float>(0, threshLineHeight), juce::Point<float>(400 + newSliderShiftTmp, threshLineHeight)), 1.0f);
 
     // comp line
@@ -245,7 +246,8 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
     g.setColour(cCompLine);
     compLine.clear();
     float x1, y1, x2, y2, x3, y3, x4, y4;
-    double thresh = -1.0 * sliders[1]->getValue() / 60.0 * 400.0;
+    //double thresh = -1.0 * sliders[1]->getValue() / 60.0 * 400.0;
+    double thresh = -1.0 * sliders[1]->getValue() / 60.0 * (400.0 + newSliderShiftTmp);
 
     if (bDownward.getToggleState())
     {
@@ -384,6 +386,8 @@ void Comp4AudioProcessorEditor::sliderValueChanged(juce::Slider* slider)
     audioProcessor.sidechainHP = sliders[11]->getValue();
     audioProcessor.sidechainLP = sliders[12]->getValue();
     //sRatio.setBounds(0, 425, 70, 75);
+    // audioProcessor.Comp4UpdateLatency(std::max(audioProcessor.rmsWindowLength, audioProcessor.lookAhead));
+    //audioProcessor.Comp4UpdateLatency(std::max((double)audioProcessor.rmsOffset, audioProcessor.lookAhead));
     repaint();
 }
 void Comp4AudioProcessorEditor::onStateSwitch()
@@ -393,6 +397,11 @@ void Comp4AudioProcessorEditor::onStateSwitch()
     audioProcessor.debugCurrentFunctionIndexEditor = 6;
     audioProcessor.downward = bDownward.getToggleState();
     audioProcessor.sidechainEnable = bSidechainEnable.getToggleState();
+    if (audioProcessor.keySignalPrevious != audioProcessor.sidechainEnable)
+    {
+        audioProcessor.keySignalPrevious = audioProcessor.sidechainEnable;
+        audioProcessor.keySignalSwitched = true;
+    }
     audioProcessor.sidechainListen = bSidechainListen.getToggleState();
     audioProcessor.sidechainMuteInput = bSidechainMuteInput.getToggleState();
     
@@ -499,10 +508,11 @@ void Comp4AudioProcessorEditor::timerCallback()
         //bars[i]->setValue(Comp4Signaltodb(audioProcessor.currentValuesOld[i]));
         //bars[i]->setValue(std::abs(audioProcessor.currentValuesOld[i]));
 
-        bars[i]->setValue(Comp4SignaltoRMSdb(audioProcessor.currentValues[i]));
+        //bars[i]->setValue(Comp4SignaltoRMSdb(audioProcessor.currentValues[i]));
 
-        //double tmp = Comp4SignaltoRMSdb(audioProcessor.currentValues[i]);
-        //bars[i]->setValue(tmp);
+        double tmp = Comp4SignaltoRMSdb(audioProcessor.currentValues[i]);
+        //jassert(!std::isnan(tmp));
+        bars[i]->setValue(tmp);
 
         audioProcessor.currentValues[i].clear();
         //if (i != 0) barCountDiff.push_back(audioProcessor.currentValues[i - 1].size());
@@ -511,6 +521,7 @@ void Comp4AudioProcessorEditor::timerCallback()
     bars[7]->setValue(bars[5]->getValue() - bars[1]->getValue());
 }
 
+//double Comp4AudioProcessorEditor::Comp4SignaltoRMSdb(std::vector<double>& signal)
 double Comp4AudioProcessorEditor::Comp4SignaltoRMSdb(std::vector<double>& signal)
 {
     //std::cout << "Comp4SignaltoRMSdb\n";

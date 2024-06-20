@@ -1,4 +1,4 @@
-/*
+﻿/*
   ==============================================================================
 
     This file contains the basic framework code for a JUCE plugin processor.
@@ -44,26 +44,58 @@ Comp4AudioProcessor::Comp4AudioProcessor()
     sidechainEnable = false;
     sidechainListen = false;
     sidechainMuteInput = false;
-    //previousInputGain = 0.0;
-    //previousSidechainGain = 0.0;
-    double sr = 44100.0;
-    attackSamples = attack * sr * 0.001;
-    releaseSamples = release * sr * 0.001;
-    holdSamples = hold * sr * 0.001;
-    lookAheadSamples = lookAhead * sr * 0.001;
-    rmsWindowSamples = rmsWindowLength * sr * 0.001;
-    attackSamplesLeft = attackSamples;
-    releaseSamplesLeft = releaseSamples;
+    previousInputGain = 0.0;
+    previousSidechainGain = 0.0;
+    previousOutputGain = 0.0;
+    sampleRate = 44100.0;
+    //attackSamples = std::round(attack * sampleRate * 0.001);
+    //releaseSamples = std::round(release * sampleRate * 0.001);
+    holdSamples = std::round(hold * sampleRate * 0.001);
+    lookAheadSamples = std::round(lookAhead * sampleRate * 0.001);
+    rmsWindowSamples = std::round(rmsWindowLength * sampleRate * 0.001);
+    if (rmsWindowSamples % 2 == 0) rmsWindowSamples++;
+    rmsOffsetInSamples = (rmsWindowSamples - 1) / 2;
+    //rmsOffsetInSamples = std::round(rmsOffsetInMs * sampleRate * 0.001);
+    //attackSamplesLeft = attackSamples;
+    //releaseSamplesLeft = releaseSamples;
     holdSamplesLeft = holdSamples;
-    lookAheadSamplesLeft = lookAheadSamples;
-    rmsWindowSamplesLeft = rmsWindowSamples;
-    rmsSquareSum = 0.0;
-    compressionEngaged = false;
+    holdSamplesPrevious = holdSamples;
+    //lookAheadSamplesLeft = lookAheadSamples;
+    //rmsWindowSamplesLeft = rmsWindowSamples;
+    gainReduction = 0.0;
+    previousGainReduction = 0.0;
+    // maxAttackGainPerSample = 10.0 / attack / sampleRate * 0.001;
+    // maxReleaseGainPerSample = 10.0 / release / sampleRate * 0.001;
+    maxAttackGainPerSample = 10.0 / attack / sampleRate * 1000.0;
+    maxReleaseGainPerSample = 10.0 / release / sampleRate * 1000.0;
+    //compressionEngaged = false;
     //prevValue = 0.0f;
     bezierRatio = 1.0;
     bezierThresh = 0.0;
     currentRatio = 1.0;
     currentThresh = 0.0;
+    rmsSquareSum = 0.0;
+    sdbkeyrms = 0.0;
+    attackPhase = false;
+    //originalValues[0] = 0.0f;
+    //originalValues[1] = 0.0f;
+    windowOpen = false;
+    keySignalSwitched = true;
+    keySignalPrevious = true;
+    // Comp4UpdateLatencySteps(oldSampleRate);
+    // Comp4UpdateLatency(oldSampleRate, std::max(rmsWindowLength, lookAhead));
+    minimalLatencyInSamples = 0;
+    currentLatencyInSamples = 0;
+    latencyStepsInMs[0] = 1;
+    latencyStepsInMs[1] = 5;
+    latencyStepsInMs[2] = 20;
+    latencyStepsInMs[3] = 50;
+    latencyStepsInMs[4] = 100;
+    latencyStepsInMs[5] = 200;
+    latencyStepsInMs[6] = 500;
+    Comp4UpdateLatencySteps();
+    //Comp4UpdateLatency(std::max(rmsWindowLength, lookAhead));
+    Comp4UpdateLatency(std::max(rmsOffsetInSamples, lookAheadSamples));
 }
 
 Comp4AudioProcessor::~Comp4AudioProcessor()
@@ -206,7 +238,7 @@ bool Comp4AudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) co
 void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     debugCurrentFunctionIndexProcessor = 3;
-    juce::ScopedNoDenormals noDenormals;
+    //juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
     auto smpNum = buffer.getNumSamples();
@@ -236,21 +268,35 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     //double xknee1 = Comp4DecibelsToAmplitude(thresh - knee / 2.0);
     //double xknee2 = Comp4DecibelsToAmplitude(thresh + knee / 2.0);
     //double inputGainLin = Comp4DecibelsToAmplitude(inputGain);
-    buffer.applyGainRamp(0, 0, buffer.getNumSamples(), previousInputGain, inputGain);
-    buffer.applyGainRamp(1, 0, buffer.getNumSamples(), previousInputGain, inputGain);
-    previousInputGain = inputGain;
+    if (previousInputGain != inputGain || inputGain != 0)
+    {
+        buffer.applyGainRamp(0, 0, buffer.getNumSamples(), previousInputGain, inputGain);
+        buffer.applyGainRamp(1, 0, buffer.getNumSamples(), previousInputGain, inputGain);
+        previousInputGain = inputGain;
+    }
     //double sidechainGainLin = Comp4DecibelsToAmplitude(sidechainInputGain);
-    buffer.applyGainRamp(2, 0, buffer.getNumSamples(), previousSidechainGain, sidechainGain);
-    buffer.applyGainRamp(3, 0, buffer.getNumSamples(), previousSidechainGain, sidechainGain);
-    previousSidechainGain = sidechainGain;
+    if (previousSidechainGain != sidechainGain || sidechainGain != 0)
+    {
+        buffer.applyGainRamp(2, 0, buffer.getNumSamples(), previousSidechainGain, sidechainGain);
+        buffer.applyGainRamp(3, 0, buffer.getNumSamples(), previousSidechainGain, sidechainGain);
+        previousSidechainGain = sidechainGain;
+    }
     //double outputGainLin = Comp4DecibelsToAmplitude(outputGain);
-    attackSamples = std::round(attack * getSampleRate() * 0.001);
-    releaseSamples = std::round(release * getSampleRate() * 0.001);
-    holdSamples = std::round(hold * getSampleRate() * 0.001);
-    lookAheadSamples = std::round(lookAhead * getSampleRate() * 0.001);
-    releasea = (ratio * releaseSamples - ratio) / (1.0 - ratio);
+    double newSampleRate = getSampleRate();
+    if (newSampleRate != sampleRate)
+    {
+        sampleRate = newSampleRate;
+        Comp4UpdateLatencySteps();
+    }
+    // attackSamples = std::round(attack * sampleRate * 0.001);
+    // releaseSamples = std::round(release * sampleRate * 0.001);
+    // holdSamples = std::round(hold * sampleRate * 0.001);
+    // lookAheadSamples = std::round(lookAhead * sampleRate * 0.001);
+    // rmsWindowSamples = std::round(rmsWindowLength * sampleRate * 0.001);
+    // releasea = (ratio * releaseSamples - ratio) / (1.0 - ratio);
+    //double sampleRate = getSampleRate();
 
-
+    // Processing the sidechain input with high-pass and low-pass filters.
     //juce::dsp::AudioBlock<float> blockl(buffer);
     juce::dsp::AudioBlock<float> block(buffer);
     block = block.getSubsetChannelBlock(2, 2);
@@ -259,7 +305,96 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     hpf.process(juce::dsp::ProcessContextReplacing<float>(block));
     lpf.process(juce::dsp::ProcessContextReplacing<float>(block));
 
-    for (int smp = 0; smp < smpNum; ++smp)
+    //attackSamples = std::round(attack * sampleRate * 0.001);
+    //releaseSamples = std::round(release * sampleRate * 0.001);
+    // Calculating each timing parameter from ms to samples, as the sample rate may have changed and its accurate retrieval is only possible in processBlock
+    holdSamples = std::round(hold * sampleRate * 0.001);
+    if (holdSamples != holdSamplesPrevious)
+    {
+        holdSamplesLeft = holdSamples;
+        holdSamplesPrevious = holdSamples;
+    }
+    maxAttackGainPerSample = 10.0 / attack / sampleRate * 1000.0;
+    maxReleaseGainPerSample = 10.0 / release / sampleRate * 1000.0;
+    lookAheadSamples = std::round(lookAhead * sampleRate * 0.001);
+    rmsWindowSamples = std::round(rmsWindowLength * sampleRate * 0.001);
+    if (rmsWindowSamples % 2 == 0) rmsWindowSamples++;
+    rmsOffsetInSamples = (rmsWindowSamples - 1) / 2;
+    Comp4UpdateLatency(std::max(rmsOffsetInSamples, lookAheadSamples));
+    // releasea = (ratio * releaseSamples - ratio) / (1.0 - ratio);
+    //maxAttackGainPerSample = 10.0 / attack / sampleRate * 0.001;
+    //maxReleaseGainPerSample = 10.0 / release / sampleRate * 0.001;
+
+    // Passing the samples from buffer to the memoryBuffer.
+    for (int sample = 0; sample < smpNum; sample++)
+        for (int channel = 0; channel < 4; channel++)
+            memoryBuffer[channel].push_back(channelsData[channel][sample]);
+    // If latency exceeds currently accumulated samples, buffer is cleared and returned, as there is not enough samples to begin processing yet.
+    if (memoryBuffer[0].size() <= currentLatencyInSamples)
+    {
+        buffer.clear();
+        return;
+    }
+    // Total amount of samples that are able to be processed (accumulated samples minus latency in samples).
+    int samplesToProcess = memoryBuffer[0].size() - currentLatencyInSamples;
+    // In case the latency was reduced since last call to processBlock, older samples are removed until samples count in memoryBuffer is equal to sum of samples in buffer and currentLatencyInSamples.
+    for (int sample = 0; sample < samplesToProcess - smpNum; sample++)
+        for (int channel = 0; channel < 4; channel++)
+            memoryBuffer[channel].pop_front();
+    // On the other hand, if samples count in memoryBuffer is smaller than sum of samples in buffer and currentLatencyInSamples
+    // (this is the case if this is the first processBlock call with enough samples to start processing), then 0's are used to fill the beginning of the buffer.
+    int startingSample = smpNum - memoryBuffer[0].size() + currentLatencyInSamples;
+    jassert(startingSample >= 0);
+    for (int sample = 0; sample < startingSample; sample++)
+        for (int channel = 0; channel < 4; channel++)
+            channelsData[channel][sample] = 0;
+    
+    //if (keySignalSwitched)
+    //{
+    //    keySignalSwitched = false;
+    //    int channelOffset = sidechainEnable ? 2 : 0;
+    //    int channel;
+    //    for (int keySignalChannel = 0; keySignalChannel < 2; keySignalChannel++)
+    //    {
+    //        rmsQueues[keySignalChannel] = std::queue<float>();
+    //        rmsQueues[keySignalChannel].push(0);
+    //        channel = keySignalChannel + channelOffset;
+    //        for (int keySignalSample = -rmsOffset; keySignalSample < rmsOffset; keySignalSample++)
+    //        {
+    //            rmsQueues[keySignalChannel].push(channelsData[channel][std::abs(keySignalSample)]);
+    //        }
+    //    }
+    //}
+
+    //if (keySignalSwitched)
+    //{
+    //    keySignalSwitched = false;
+    //    int channelOffset = sidechainEnable ? 2 : 0;
+    //    int channel;
+    //    for (int keySignalChannel = 0; keySignalChannel < 2; keySignalChannel++)
+    //    {
+    //        rmsQueues[keySignalChannel] = std::queue<float>();
+    //        channel = keySignalChannel + channelOffset;
+    //        for (int sample = samplesToProcess - 1; sample < rmsWindowSamples; sample++)
+    //            rmsQueues[keySignalChannel].push(0);
+    //        for (int sample = 0; sample < samplesToProcess; sample++)
+    //            rmsQueues[keySignalChannel].push(memoryBuffer[keySignalChannel + channelOffset].front());
+    //}
+
+    // If sidechain was enabled/disabled since the previous call to processBlock, rms queues are replaced with 0's, since values inside them are no longer relevant.
+    if (keySignalSwitched)
+    {
+        keySignalSwitched = false;
+        rmsSquareSum = 0;
+        for (int channel = 0; channel < 2; channel++)
+        {
+            rmsQueues[channel] = std::queue<float>();
+            for (int sample = 0; sample < rmsWindowSamples; sample++)
+                rmsQueues[channel].push(0);
+        }
+    }
+
+    for (int smp = startingSample; smp < smpNum; ++smp)
     {
         //for (int channel = 0; channel < totalNumInputChannels; ++channel)
         //{
@@ -268,14 +403,339 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         //}
         for (int channel = 0; channel < 2; ++channel)
         {
+            float rmsValueToRemove, rmsValueToAdd;
+            rmsValueToRemove = rmsQueues[channel].front();
+            rmsSquareSum -= rmsValueToRemove * rmsValueToRemove;
+            rmsQueues[channel].pop();
+            //channelsData[channel + 2][smp] *= sidechainGainLin;
+            s = memoryBuffer[channel].front();
+            sdb = Comp4AmplitudeToDecibels(s);
+            //int rmsNewValueIndex = smp + rmsOffsetInSamples;
+            //sdbkey = sidechainEnable ? Comp4AmplitudeToDecibels(channelsData[channel + 2][smp]) : sdb;
+            if (sidechainEnable)
+            {
+                //sdbkey = Comp4AmplitudeToDecibels(memoryBuffer[channel + 2].front());
+                //int tmp = smp + rmsOffset;
+                //rmsQueues[channel].push(memoryBuffer[channel + 2][tmp]);
+                //rmsValueToAdd = memoryBuffer[channel + 2][rmsNewValueIndex];
+                rmsValueToAdd = memoryBuffer[channel + 2][rmsOffsetInSamples];
+                // rmsQueues[channel].push(rmsValueToAdd);
+                // if (smp + rmsOffset < smpNum) rmsQueues[channel].push(memoryBuffer[channel + 2][smp + rmsOffset]);
+                // else rmsQueues[channel].push(memoryBuffer[channel + 2][smpNum * 2 - smp - rmsOffset]);
+            }
+            else
+            {
+                //sdbkey = sdb;
+                //rmsValueToAdd = memoryBuffer[channel][rmsNewValueIndex];
+                rmsValueToAdd = memoryBuffer[channel][rmsOffsetInSamples];
+                // rmsQueues[channel].push(rmsValueToAdd);
+                // if (smp + rmsOffset < smpNum) rmsQueues[channel].push(memoryBuffer[channel][smp + rmsOffset]);
+                // else rmsQueues[channel].push(memoryBuffer[channel][smpNum * 2 - smp - rmsOffset]);
+            }
+            rmsQueues[channel].push(rmsValueToAdd);
+            rmsSquareSum += rmsValueToAdd * rmsValueToAdd;
+            //double sabs = sidechainEnable ? std::abs(channelsData[channel+2][smp]) : std::abs(*s);
+            //double newValuedb = 0;
+            //originalValues[channel] = s;
+            //if (smp % 100 == 0) DBG(attackSamplesLeft);
+            sdbkeyrms = Comp4AmplitudeToDecibels(std::sqrt(rmsSquareSum / rmsWindowSamples / 2.0));
+        }
+        sdbmean = Comp4AmplitudeToDecibels(std::sqrt(memoryBuffer[0].front() * memoryBuffer[0].front() + memoryBuffer[1].front() * memoryBuffer[1].front()));
+
+        if (ratio != 1.0 && !std::isinf(sdbmean))
+        {
+            if (!downward)
+            {
+                if (sdbkeyrms >= thresh + knee / 2.0)
+                {
+                    gainReduction = sdbmean - (thresh + (sdbmean - thresh) / ratio);
+                    attackPhase = true;
+
+                }
+                else if (sdbkeyrms > thresh - knee / 2.0)
+                {
+                    Comp4UpdateBezier(sdbkeyrms);
+                    gainReduction = sdbmean - (bezierThresh + (sdbmean - bezierThresh) / bezierRatio);
+                    attackPhase = true;
+                    // !!!!!!!CZY PRZECHODZENIE Z BUFORA DO BUFORA NIE NOSI ZE SOBĄ ARTEFAKTÓW?!!!!!!!
+                }
+                else
+                {
+                    gainReduction = 0;
+                    attackPhase = false;
+                }
+
+                // if (gainReduction - previousGainReduction > maxAttackGainPerSample)
+                // {
+                //     gainReduction = previousGainReduction + maxAttackGainPerSample;
+                //     holdSamplesLeft = holdSamples;
+                // }
+                // else if (gainReduction - previousGainReduction < 0 && holdSamplesLeft > 0)
+                // {
+                //     gainReduction = previousGainReduction;
+                //     holdSamplesLeft--;
+                // }
+                // else if (gainReduction - previousGainReduction < maxReleaseGainPerSample * -1.0)
+                // {
+                //     //gainReduction = -1.0 * previousGainReduction[channel] - maxReleaseGainPerSample;
+                //     gainReduction = previousGainReduction - maxReleaseGainPerSample;
+                // }
+            }
+            else
+            {
+                if (sdbkeyrms <= thresh - knee / 2.0)
+                {
+                    gainReduction = sdbmean - (thresh - (thresh - sdbmean) / ratio);
+                    attackPhase = true;
+                }
+                else if (sdbkeyrms < thresh + knee / 2.0)
+                {
+                    Comp4UpdateBezier(sdbkeyrms);
+                    gainReduction = sdbmean - (bezierThresh - (bezierThresh - sdbmean) / bezierRatio);
+                    attackPhase = true;
+                }
+                else
+                {
+                    gainReduction = 0;
+                    attackPhase = false;
+                }
+
+                // if (previousGainReduction - gainReduction > maxAttackGainPerSample)
+                // {
+                //     gainReduction = previousGainReduction - maxAttackGainPerSample;
+                //     holdSamplesLeft = holdSamples;
+                // }
+                // else if (previousGainReduction - gainReduction < 0 && holdSamplesLeft > 0)
+                // {
+                //     gainReduction = previousGainReduction;
+                //     holdSamplesLeft--;
+                // }
+                // else if (previousGainReduction - gainReduction < maxReleaseGainPerSample * -1.0)
+                // {
+                //     gainReduction = previousGainReduction + maxReleaseGainPerSample;
+                // }
+            }
+        }
+        else
+        {
+            gainReduction = 0;
+            attackPhase = false;
+        }
+        jassert(!std::isnan(gainReduction) && !std::isinf(gainReduction));
+
+        if (attackPhase && std::abs(gainReduction - previousGainReduction) > maxAttackGainPerSample)
+        {
+            if (gainReduction > previousGainReduction) gainReduction = previousGainReduction + maxAttackGainPerSample;
+            else gainReduction = previousGainReduction - maxAttackGainPerSample;
+            holdSamplesLeft = holdSamples;
+        }
+        else if (!attackPhase && holdSamplesLeft > 0)
+        {
+            gainReduction = previousGainReduction;
+            holdSamplesLeft--;
+        }
+        else if (!attackPhase && std::abs(gainReduction - previousGainReduction) > maxReleaseGainPerSample)
+        {
+            if (gainReduction > previousGainReduction) gainReduction = previousGainReduction + maxReleaseGainPerSample;
+            else gainReduction = previousGainReduction - maxReleaseGainPerSample;
+        }
+        previousGainReduction = gainReduction;
+
+        //s = s >= 0 ? Comp4DecibelsToAmplitude(currentThresh + (sdb - currentThresh) / currentRatio) :
+        //    -1.0 * Comp4DecibelsToAmplitude(currentThresh + (sdb - currentThresh) / currentRatio);
+        //s = s >= 0 ? Comp4DecibelsToAmplitude(sdb - gainReduction) : -1.0 * Comp4DecibelsToAmplitude(sdb - gainReduction);
+        //previousSamplePositive[channel] = s >= 0;
+        //previousSampledB[channel] = sdb - gainReduction;
+        //s = Comp4DecibelsToAmplitude(previousSampledB[channel]);
+        //if (!previousSamplePositive) s *= -1.0;
+
+        // if (ratio != 1.0)
+        // {
+        //     if (!downward)
+        //     {
+        //         if (sdbkeyrms >= thresh + knee / 2.0)
+        //         {
+        //             if (compressionReleased) Comp4UnreleaseCompression();
+        //             if (!compressionEngaged) Comp4EngageCompression();
+        //             currentThresh = thresh;
+        //             if (attackSamplesLeft > 0)
+        //             {
+        //                 // attackb = (attackSamples * ratio + previousRatio) / (ratio - previousRatio);
+        //                 // attacka = -1.0 * ratio * (attackb + 1.0);
+        //                 attacka = (attackSamples * ratio + 1.0) / (ratio - 1.0);
+        //                 attackb = -1.0 * attacka - 1;
+        //                 currentRatio = attacka / (attackSamples - attackSamplesLeft - attackb);
+        //                 attackSamplesLeft--;
+        //             }
+        //             else currentRatio = ratio;
+        // 
+        //         }
+        //         else if (sdbkeyrms > thresh - knee / 2.0)
+        //         {
+        //             if (compressionReleased) Comp4UnreleaseCompression();
+        //             if (!compressionEngaged) Comp4EngageCompression();
+        //             Comp4UpdateBezier(sdbkeyrms);
+        //             currentThresh = bezierThresh;
+        //             if (attackSamplesLeft > 0)
+        //             {
+        //                 // attackb = (attackSamples * bezierRatio + previousRatio) / (bezierRatio - previousRatio);
+        //                 // attacka = -1.0 * bezierRatio * (attackb + 1.0);
+        //                 attacka = (attackSamples * bezierRatio + 1.0) / (bezierRatio - 1.0);
+        //                 attackb = -1.0 * attacka - 1;
+        //                 currentRatio = attacka / (attackSamples - attackSamplesLeft - attackb);
+        //                 attackSamplesLeft--;
+        //             }
+        //             else currentRatio = bezierRatio;
+        //         }
+        //         else //currentRatio = 1.0;
+        //         {
+        //             if (compressionEngaged)
+        //             {
+        //                 compressionReleased = true;
+        //                 attackSamplesLeft = attackSamples;
+        //                 if (holdSamplesLeft > 0) holdSamplesLeft--;
+        //                 else if (releaseSamplesLeft > 0)
+        //                 {
+        //                     // releaseb = (releaseSamples * ratio + previousRatio) / (ratio - previousRatio);
+        //                     // releasea = -1.0 * ratio * (attackb + 1.0);
+        //                     releasea = (releaseSamples * ratio + 1.0) / (ratio - 1.0);
+        //                     releaseb = -1.0 * releasea - 1;
+        //                     currentRatio = releasea / (releaseSamplesLeft - releaseb);
+        //                     releaseSamplesLeft--;
+        //                 }
+        //                 else Comp4DisengageCompression();
+        //             }
+        //             else currentRatio = 1.0;
+        //             //!!!!!ZAMIAST UŻYWAĆ FUNKCJI DO WYLICZANIA ODPOWIEDNIEGO RATIO PO PROSTU LICZYĆ LINIOWO DOCELOWĄ REDUKCJĘ I SKALOWAĆ PRZEZ UPŁYNIĘTE PRÓBKI?!!!!!!!!!!
+        //         }
+        //     }
+        //     else
+        //     {
+        //         if (sdbkeyrms <= thresh - knee / 2.0)
+        //         {
+        //             currentThresh = thresh;
+        //             if (!compressionEngaged) Comp4EngageCompression();
+        //             if (attackSamplesLeft > 0)
+        //             {
+        //                 attacka = (ratio * attackSamples - ratio) / (1 - ratio);
+        //                 currentRatio = attacka / (attackSamples - attackSamplesLeft + attacka);
+        //                 attackSamplesLeft--;
+        //             }
+        //             else currentRatio = ratio;
+        //         }
+        //         //else if (sdbkey < thresh + knee / 2.0)
+        //         else if (sdbkeyrms < thresh + knee / 2.0)
+        //         {
+        //             currentThresh = bezierThresh;
+        //             if (!compressionEngaged) Comp4EngageCompression();
+        //             if (attackSamplesLeft > 0)
+        //             {
+        //                 Comp4UpdateBezier(sdb);
+        //                 //Comp4UpdateBezier(sdbkey);
+        //                 attacka = (bezierRatio * attackSamples - bezierRatio) / (1 - bezierRatio);
+        //                 currentRatio = attacka / (attackSamples - attackSamplesLeft + attacka);
+        //                 attackSamplesLeft--;
+        //             }
+        //             else currentRatio = bezierRatio;
+        //         }
+        //         else //currentRatio = 1.0;
+        //         {
+        //             if (compressionEngaged) Comp4DisengageCompression();
+        //             if (holdSamplesLeft > 0) holdSamplesLeft--;
+        //             else if (releaseSamplesLeft > 0)
+        //             {
+        //                 currentRatio = releasea / (releaseSamplesLeft + releasea);
+        //                 releaseSamplesLeft--;
+        //             }
+        //             else currentRatio = 1.0;
+        //         }
+        //     }
+        // }
+        // 
+        // s = s >= 0 ? Comp4DecibelsToAmplitude(currentThresh + (sdb - currentThresh) / currentRatio) :
+        //     -1.0 * Comp4DecibelsToAmplitude(currentThresh + (sdb - currentThresh) / currentRatio);
+
+        // if (windowOpen)
+        // {
+        //     currentValues[channel].push_back(originalValues[channel]);
+        //     currentValues[channel + 2].push_back(channelsData[channel + 2][smp]);
+        //     currentValues[channel + 4].push_back(channelsData[channel][smp]);
+        // }
+        for (int channel = 0; channel < 2; ++channel)
+        {
+            s = s >= 0 ? Comp4DecibelsToAmplitude(sdb - gainReduction) : -1.0 * Comp4DecibelsToAmplitude(sdb - gainReduction);
+            jassert(!std::isnan(s));
+            if (windowOpen)
+            {
+                //currentValues[channel].push_back(originalValues[channel]);
+                currentValues[channel].push_back(memoryBuffer[channel].front());
+                currentValues[channel + 2].push_back(memoryBuffer[channel + 2].front());
+                currentValues[channel + 4].push_back(s);
+            }
+
+            //if (smp % 100 == 0) DBG(currentValues[channel][smp] - originalValues[channel]);
+            //if (smp % 100 == 0) DBG(channel);
+
+            //currentValues[channel + 6].push_back(channelsData[channel][smp] - originalValues[channel]);
+            //if (sidechainMuteInput) channelsData[channel][smp] = 0;
+            //if (sidechainListen) channelsData[channel][smp] += channelsData[channel + 2][smp];
+
+            //currentValuesOld[channel] = originalValues[channel];
+            //currentValuesOld[channel + 2] = channelsData[channel + 2][smp];
+            //currentValuesOld[channel + 4] = channelsData[channel][smp];
+            //currentValuesOld[channel + 6] = std::abs(currentValuesOld[channel + 4]) - std::abs(currentValuesOld[channel]);
+            // if (sidechainMuteInput) channelsData[channel][smp] = 0;
+            // if (sidechainListen) channelsData[channel][smp] += channelsData[channel + 2][smp];
+            // if (sidechainMuteInput) memoryBuffer[channel].front() = 0;
+            // if (sidechainListen) memoryBuffer[channel].front() += memoryBuffer[channel + 2].front();
+
+            // if (!sidechainMuteInput && !sidechainListen) channelsData[channel][smp] = memoryBuffer[channel].front();
+            // else if (sidechainMuteInput && !sidechainListen) channelsData[channel][smp] = 0;
+            // else if (!sidechainMuteInput && sidechainListen) channelsData[channel][smp] = memoryBuffer[channel].front() + memoryBuffer[channel + 2].front();
+            // else channelsData[channel][smp] = memoryBuffer[channel + 2].front();
+
+            //channelsData[channel][smp] = memoryBuffer[channel].front();
+            //channelsData[channel][smp] = !sidechainMuteInput * memoryBuffer[channel].front() + sidechainListen * memoryBuffer[channel + 2].front();
+            channelsData[channel][smp] = !sidechainMuteInput * s + sidechainListen * memoryBuffer[channel + 2].front();
+            memoryBuffer[channel].pop_front();
+            memoryBuffer[channel + 2].pop_front();
+
+            //*s *= outputGainLin;
+        }
+    }
+
+    /* for (int smp = 0; smp < smpNum; ++smp)
+    {
+        //for (int channel = 0; channel < totalNumInputChannels; ++channel)
+        //{
+        //    currentValues[channel].push_back(channelsData[channel][smp]);
+        //    //currentValuesOld[channel] = channelsData[channel][smp];
+        //}
+        for (int channel = 0; channel < 2; ++channel)
+        {
+            rmsQueues[channel].pop();
             //channelsData[channel + 2][smp] *= sidechainGainLin;
             s = &channelsData[channel][smp];
             sdb = Comp4AmplitudeToDecibels(*s);
-            sdbkey = sidechainEnable ? Comp4AmplitudeToDecibels(channelsData[channel + 2][smp]) : sdb;
+            //sdbkey = sidechainEnable ? Comp4AmplitudeToDecibels(channelsData[channel + 2][smp]) : sdb;
+            if (sidechainEnable)
+            {
+                sdbkey = Comp4AmplitudeToDecibels(channelsData[channel + 2][smp]);
+                if (smp + rmsOffset < smpNum) rmsQueues[channel].push(channelsData[channel + 2][smp + rmsOffset]);
+                else rmsQueues[channel].push(channelsData[channel + 2][smpNum * 2 - smp - rmsOffset]);
+            }
+            else
+            {
+                sdbkey = sdb;
+                if (smp + rmsOffset < smpNum) rmsQueues[channel].push(channelsData[channel][smp + rmsOffset]);
+                else rmsQueues[channel].push(channelsData[channel][smpNum * 2 - smp - rmsOffset]);
+            }
             //double sabs = sidechainEnable ? std::abs(channelsData[channel+2][smp]) : std::abs(*s);
             //double newValuedb = 0;
             originalValues[channel] = *s;
             //if (smp % 100 == 0) DBG(attackSamplesLeft);
+
+
             if (ratio != 1.0)
             {
                 if (!downward)
@@ -392,11 +852,14 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
             //*s *= outputGainLin;
         }
-    }
+    } */
 
-    buffer.applyGainRamp(0, 0, buffer.getNumSamples(), previousOutputGain, outputGain);
-    buffer.applyGainRamp(1, 0, buffer.getNumSamples(), previousOutputGain, outputGain);
-    previousOutputGain = outputGain;
+    if (previousOutputGain != outputGain || outputGain != 0)
+    {
+        buffer.applyGainRamp(0, 0, buffer.getNumSamples(), previousOutputGain, outputGain);
+        buffer.applyGainRamp(1, 0, buffer.getNumSamples(), previousOutputGain, outputGain);
+        previousOutputGain = outputGain;
+    }
 
     //*hpf.state = *juce::dsp::IIR::Coefficients<float>::makeHighPass(getSampleRate(), sidechainHP);
     //*lpf.state = *juce::dsp::IIR::Coefficients<float>::makeLowPass(getSampleRate(), sidechainLP);
@@ -516,30 +979,41 @@ double Comp4AudioProcessor::Comp4AmplitudeToDecibels(float signal)
     debugCurrentFunctionIndexProcessor = 9;
     return 20.0 * std::log10(std::abs(signal));
 }
-void Comp4AudioProcessor::Comp4EngageCompression()
-{
-    debugCurrentFunctionIndexProcessor = 10;
-    attackSamplesLeft = attackSamples;
-    compressionEngaged = true;
-    return;
-}
-
-void Comp4AudioProcessor::Comp4DisengageCompression()
-{
-    debugCurrentFunctionIndexProcessor = 11;
-    releaseSamplesLeft = releaseSamples;
-    holdSamplesLeft = holdSamples;
-    compressionEngaged = false;
-    return;
-}
+//void Comp4AudioProcessor::Comp4EngageCompression()
+//{
+//    debugCurrentFunctionIndexProcessor = 10;
+//    attackSamplesLeft = attackSamples;
+//    compressionEngaged = true;
+//    return;
+//}
+//
+//void Comp4AudioProcessor::Comp4DisengageCompression()
+//{
+//    debugCurrentFunctionIndexProcessor = 11;
+//    releaseSamplesLeft = releaseSamples;
+//    holdSamplesLeft = holdSamples;
+//    compressionEngaged = false;
+//    return;
+//}
+//
+//void Comp4AudioProcessor::Comp4UnreleaseCompression()
+//{
+//    releaseSamplesLeft = releaseSamples;
+//    holdSamplesLeft = holdSamples;
+//    compressionReleased = false;
+//    return;
+//}
 
 void Comp4AudioProcessor::Comp4UpdateBezier(double inputdb)
 {
     debugCurrentFunctionIndexProcessor = 12;
+    // X coordinates of three given points of the bezier curve being the knee of the compression graph
     double x1 = thresh - knee;
     double x2 = thresh;
     double x3 = thresh + knee;
+    // Calculated from Bezier curve formula for x coordinate after solving for t
     double t = (thresh - knee - inputdb) / (-2.0 * knee);
+    // Y coordinates of three given points
     double y1, y2, y3, y;
     y2 = thresh;
     if (!downward)
@@ -553,11 +1027,54 @@ void Comp4AudioProcessor::Comp4UpdateBezier(double inputdb)
         y1 = y2 - knee / ratio;
     }
 
+    // Y coordinate of the curve for x = inputdb
     y = (1 - t) * (1 - t) * y1 + 2 * (1 - t) * t * y2 + t * t * y3;
     double xprim = 2.0 * (1.0 - t) * (x2 - x1) + 2.0 * t * (x3 - x2);
     double yprim = 2.0 * (1.0 - t) * (y2 - y1) + 2.0 * t * (y3 - y2);
+    // Dividing the derivatives gives us the slope of the tangent line in point (inputdb, y), which is by definition the (instantaneous) compression ratio
+    // (the compression graph no longer consists only of straight lines, and because of that both the ratio and the threshold change dynamically in the region of the knee)
     bezierRatio = yprim / xprim;
+    // Coefficient b in formula of the tangent line (y = ax + b), needed for calculating the instantaneous threshold
+    // (as the values below the chosen threshold are now being processed (half of the knee in x-axis), the threshold for those values needs to be adjusted)
     double bezierb = y - bezierRatio * inputdb;
-    bezierThresh = (-1.0 * bezierb) / (bezierRatio - 1);
+    // Using both coefficients (a = bezierRatio, b = bezierb) we calculate the y coordinate of the point in which the bezier curve intersects the y = x line (the uncompressed part of the signal)
+    // That coordinate is the isntantaneous threshold
+    bezierThresh = bezierb / (1.0 - bezierRatio);
     return;
+}
+void Comp4AudioProcessor::clear(std::queue<int>& q)
+{
+    std::queue<int> empty;
+    std::swap(q, empty);
+}
+void Comp4AudioProcessor::Comp4UpdateLatencySteps()
+{
+    for (int i = 0; i < 7; i++) latencyStepsInSamples[i] = std::ceil(sampleRate * latencyStepsInMs[i] * 0.001);
+    Comp4UpdateLatencyCore();
+}
+//void Comp4AudioProcessor::Comp4UpdateLatency(double newMinimalLatencyInMs)
+//{
+//    if (newMinimalLatencyInMs == minimalLatencyInMs) return;
+//    minimalLatencyInMs = newMinimalLatencyInMs;
+//    Comp4UpdateLatencyCore();
+//}
+void Comp4AudioProcessor::Comp4UpdateLatencyCore()
+{
+    //double minimalLatencyInSamples = std::ceil(minimalLatencyInMs * sampleRate * 0.001);
+    for (int i = 0; i < 7; i++)
+    {
+        if (minimalLatencyInSamples <= latencyStepsInSamples[i])
+        {
+            currentLatencyInSamples = latencyStepsInSamples[i];
+            setLatencySamples(currentLatencyInSamples);
+            return;
+        }
+    }
+    throw std::invalid_argument("Requested latency out of range of predicted values");
+}
+void Comp4AudioProcessor::Comp4UpdateLatency(double newMinimalLatencyInSamples)
+{
+    if (newMinimalLatencyInSamples == minimalLatencyInSamples) return;
+    minimalLatencyInSamples = newMinimalLatencyInSamples;
+    Comp4UpdateLatencyCore();
 }
