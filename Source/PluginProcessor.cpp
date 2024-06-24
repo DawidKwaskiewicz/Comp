@@ -79,7 +79,7 @@ Comp4AudioProcessor::Comp4AudioProcessor()
     attackPhase = false;
     //originalValues[0] = 0.0f;
     //originalValues[1] = 0.0f;
-    windowOpen = false;
+    pluginWindowOpen = false;
     keySignalSwitched = true;
     keySignalPrevious = true;
     // Comp4UpdateLatencySteps(oldSampleRate);
@@ -268,6 +268,11 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     //double xknee1 = Comp4DecibelsToAmplitude(thresh - knee / 2.0);
     //double xknee2 = Comp4DecibelsToAmplitude(thresh + knee / 2.0);
     //double inputGainLin = Comp4DecibelsToAmplitude(inputGain);
+
+    sidechainChannelsExist = totalNumInputChannels >= 4;
+    if (sidechainChannelsExist) totalNumInputChannels = 4;
+    else totalNumInputChannels = 2;
+
     if (previousInputGain != inputGain || inputGain != 0)
     {
         buffer.applyGainRamp(0, 0, buffer.getNumSamples(), previousInputGain, inputGain);
@@ -275,7 +280,7 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         previousInputGain = inputGain;
     }
     //double sidechainGainLin = Comp4DecibelsToAmplitude(sidechainInputGain);
-    if (previousSidechainGain != sidechainGain || sidechainGain != 0)
+    if (sidechainChannelsExist && (previousSidechainGain != sidechainGain || sidechainGain != 0))
     {
         buffer.applyGainRamp(2, 0, buffer.getNumSamples(), previousSidechainGain, sidechainGain);
         buffer.applyGainRamp(3, 0, buffer.getNumSamples(), previousSidechainGain, sidechainGain);
@@ -298,12 +303,15 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     // Processing the sidechain input with high-pass and low-pass filters.
     //juce::dsp::AudioBlock<float> blockl(buffer);
-    juce::dsp::AudioBlock<float> block(buffer);
-    block = block.getSubsetChannelBlock(2, 2);
-    lpf.setCutoffFrequencyHz(sidechainLP);
-    hpf.setCutoffFrequencyHz(sidechainHP);
-    hpf.process(juce::dsp::ProcessContextReplacing<float>(block));
-    lpf.process(juce::dsp::ProcessContextReplacing<float>(block));
+    if (sidechainChannelsExist)
+    {
+        juce::dsp::AudioBlock<float> block(buffer);
+        block = block.getSubsetChannelBlock(2, 2);
+        lpf.setCutoffFrequencyHz(sidechainLP);
+        hpf.setCutoffFrequencyHz(sidechainHP);
+        hpf.process(juce::dsp::ProcessContextReplacing<float>(block));
+        lpf.process(juce::dsp::ProcessContextReplacing<float>(block));
+    }
 
     //attackSamples = std::round(attack * sampleRate * 0.001);
     //releaseSamples = std::round(release * sampleRate * 0.001);
@@ -327,7 +335,7 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
     // Passing the samples from buffer to the memoryBuffer.
     for (int sample = 0; sample < smpNum; sample++)
-        for (int channel = 0; channel < 4; channel++)
+        for (int channel = 0; channel < totalNumInputChannels; channel++)
             memoryBuffer[channel].push_back(channelsData[channel][sample]);
     // If latency exceeds currently accumulated samples, buffer is cleared and returned, as there is not enough samples to begin processing yet.
     if (memoryBuffer[0].size() <= currentLatencyInSamples)
@@ -339,14 +347,14 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     int samplesToProcess = memoryBuffer[0].size() - currentLatencyInSamples;
     // In case the latency was reduced since last call to processBlock, older samples are removed until samples count in memoryBuffer is equal to sum of samples in buffer and currentLatencyInSamples.
     for (int sample = 0; sample < samplesToProcess - smpNum; sample++)
-        for (int channel = 0; channel < 4; channel++)
+        for (int channel = 0; channel < totalNumInputChannels; channel++)
             memoryBuffer[channel].pop_front();
     // On the other hand, if samples count in memoryBuffer is smaller than sum of samples in buffer and currentLatencyInSamples
     // (this is the case if this is the first processBlock call with enough samples to start processing), then 0's are used to fill the beginning of the buffer.
     int startingSample = smpNum - memoryBuffer[0].size() + currentLatencyInSamples;
     jassert(startingSample >= 0);
     for (int sample = 0; sample < startingSample; sample++)
-        for (int channel = 0; channel < 4; channel++)
+        for (int channel = 0; channel < totalNumInputChannels; channel++)
             channelsData[channel][sample] = 0;
     
     //if (keySignalSwitched)
@@ -418,7 +426,8 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                 //int tmp = smp + rmsOffset;
                 //rmsQueues[channel].push(memoryBuffer[channel + 2][tmp]);
                 //rmsValueToAdd = memoryBuffer[channel + 2][rmsNewValueIndex];
-                rmsValueToAdd = memoryBuffer[channel + 2][rmsOffsetInSamples];
+                if (sidechainChannelsExist) rmsValueToAdd = memoryBuffer[channel + 2][rmsOffsetInSamples];
+                else rmsValueToAdd = 0;
                 // rmsQueues[channel].push(rmsValueToAdd);
                 // if (smp + rmsOffset < smpNum) rmsQueues[channel].push(memoryBuffer[channel + 2][smp + rmsOffset]);
                 // else rmsQueues[channel].push(memoryBuffer[channel + 2][smpNum * 2 - smp - rmsOffset]);
@@ -665,11 +674,11 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         {
             s = s >= 0 ? Comp4DecibelsToAmplitude(sdb - gainReduction) : -1.0 * Comp4DecibelsToAmplitude(sdb - gainReduction);
             jassert(!std::isnan(s));
-            if (windowOpen)
+            if (pluginWindowOpen)
             {
                 //currentValues[channel].push_back(originalValues[channel]);
                 currentValues[channel].push_back(memoryBuffer[channel].front());
-                currentValues[channel + 2].push_back(memoryBuffer[channel + 2].front());
+                if (sidechainChannelsExist) currentValues[channel + 2].push_back(memoryBuffer[channel + 2].front());
                 currentValues[channel + 4].push_back(s);
             }
 
@@ -696,9 +705,17 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
 
             //channelsData[channel][smp] = memoryBuffer[channel].front();
             //channelsData[channel][smp] = !sidechainMuteInput * memoryBuffer[channel].front() + sidechainListen * memoryBuffer[channel + 2].front();
-            channelsData[channel][smp] = !sidechainMuteInput * s + sidechainListen * memoryBuffer[channel + 2].front();
-            memoryBuffer[channel].pop_front();
-            memoryBuffer[channel + 2].pop_front();
+            if (sidechainChannelsExist)
+            {
+                channelsData[channel][smp] = !sidechainMuteInput * s + sidechainListen * memoryBuffer[channel + 2].front();
+                memoryBuffer[channel].pop_front();
+                memoryBuffer[channel + 2].pop_front();
+            }
+            else
+            {
+                channelsData[channel][smp] = !sidechainMuteInput * s;
+                memoryBuffer[channel].pop_front();
+            }
 
             //*s *= outputGainLin;
         }

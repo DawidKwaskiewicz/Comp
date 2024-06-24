@@ -136,7 +136,7 @@ public:
     // Decibel value of RMS value of currently processed L & R sample from the main input.
     double sdbmean;
     // Returns true if plugin window is currently open. Used for displaying data on bars.
-    bool windowOpen = false;
+    bool pluginWindowOpen = false;
     // Array of queues (L & R channels) containing values in the current RMS window. Used for calculating the moving average of values needed for estimating the current power of the signal, used in conjunction with timing parameters.
     std::queue<float> rmsQueues[2];
     // Returns true if sidechain was enabled/disabled since last checked (during the processing of previous block).
@@ -165,6 +165,8 @@ public:
     double rmsSquareSum;
     // Moving RMS value of currently processed sample from the key signal converted to dBFS.
     double sdbkeyrms;
+    // States if there are 4 or more input channels detected.
+    bool sidechainChannelsExist;
 
     int debugCurrentFunctionIndexEditor = 0;
     int debugCurrentFunctionIndexProcessor = 0;

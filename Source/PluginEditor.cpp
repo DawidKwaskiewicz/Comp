@@ -18,7 +18,7 @@ Comp4AudioProcessorEditor::Comp4AudioProcessorEditor (Comp4AudioProcessor& p)
     //std::cout << "Comp4AudioProcessorEditor\n";
     //debugCurrentFunctionIndex = 1;
     p.debugCurrentFunctionIndexEditor = 1;
-    audioProcessor.windowOpen = true;
+    audioProcessor.pluginWindowOpen = true;
     // Make sure that before the constructor has finished, you've set the
     // editor's size to whatever you need it to be.
 
@@ -112,7 +112,7 @@ Comp4AudioProcessorEditor::~Comp4AudioProcessorEditor()
     //debugCurrentFunctionIndex = 2;
     //audioProcessor.debugCurrentFunctionIndexEditor = 2;
     Timer::stopTimer();
-    audioProcessor.windowOpen = false;
+    audioProcessor.pluginWindowOpen = false;
 }
 
 //==============================================================================
