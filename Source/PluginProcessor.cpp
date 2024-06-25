@@ -47,7 +47,7 @@ Comp4AudioProcessor::Comp4AudioProcessor()
     previousInputGain = 0.0;
     previousSidechainGain = 0.0;
     previousOutputGain = 0.0;
-    sampleRate = 44100.0;
+    sampleRate = 48000.0;
     //attackSamples = std::round(attack * sampleRate * 0.001);
     //releaseSamples = std::round(release * sampleRate * 0.001);
     holdSamples = std::round(hold * sampleRate * 0.001);
@@ -451,7 +451,7 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         }
         sdbmean = Comp4AmplitudeToDecibels(std::sqrt(memoryBuffer[0].front() * memoryBuffer[0].front() + memoryBuffer[1].front() * memoryBuffer[1].front()));
 
-        if (ratio != 1.0 && !std::isinf(sdbmean))
+        if (ratio != 1.0 && thresh != 0.0 && !std::isinf(sdbmean))
         {
             if (!downward)
             {

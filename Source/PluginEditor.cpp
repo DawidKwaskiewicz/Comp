@@ -129,6 +129,63 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
     int graphSideLength = 470;
     g.fillRect(0, 0, graphSideLength, graphSideLength);
     //g.fillRect(0, 0, 400, 400);
+
+    // threshold line
+    g.setColour(cThreshLine);
+    int threshLineHeight = std::round(-1.0 * sliders[1]->getValue() / 60.0 * graphSideLength);
+    g.drawLine(juce::Line<float>(juce::Point<float>(0, threshLineHeight), juce::Point<float>(400 + newSliderShiftTmp, threshLineHeight)), 1.0f);
+
+    // comp line
+    g.saveState();
+    //g.reduceClipRegion(0, 0, 400 + newSliderShiftTmp, 400 + newSliderShiftTmp);
+    g.setColour(cCompLine);
+    compLine.clear();
+    float x1, y1, x2, y2, x3, y3, x4, y4;
+    //double thresh = -1.0 * sliders[1]->getValue() / 60.0 * 400.0;
+    double thresh = -1.0 * sliders[1]->getValue() / 60.0 * (400.0 + newSliderShiftTmp);
+
+    if (bDownward.getToggleState())
+    {
+        x1 = std::max(400.0 + newSliderShiftTmp - thresh - (400.0 + newSliderShiftTmp - thresh) * sliders[0]->getValue(), 0.0);
+        y1 = std::min(thresh + (400.0 + newSliderShiftTmp - thresh) / sliders[0]->getValue(), 400.0 + newSliderShiftTmp);
+        x4 = 400.0f + newSliderShiftTmp;
+        y4 = 0.0f;
+    }
+    else
+    {
+        x1 = 0.0f;
+        y1 = 400.0f + newSliderShiftTmp;
+        x4 = std::min(400 + newSliderShiftTmp - thresh + thresh * sliders[0]->getValue(), 400.0 + newSliderShiftTmp);
+        y4 = std::max(thresh - thresh / sliders[0]->getValue(), 0.0);
+    }
+    double knee = sliders[2]->getValue() / 60.0 * (400.0 + newSliderShiftTmp);
+    x2 = 400 + newSliderShiftTmp - thresh - knee / 2;
+    x3 = 400 + newSliderShiftTmp - thresh + knee / 2;
+    //y2 = thresh + (thresh - x2) / thresh * (400 - thresh);
+    //y3 = thresh - (x3 - thresh) / (400 - thresh) * thresh;
+    //y2 = std::min(thresh + (400.0 - thresh - x2) / (400.0 - thresh - x1) * (y1 - thresh), 400.0);
+    y2 = thresh + (400.0 + newSliderShiftTmp - thresh - x2) / (400.0 + newSliderShiftTmp - thresh - x1) * (y1 - thresh), 400.0 + newSliderShiftTmp;
+    y3 = thresh - (x3 - (400.0 + newSliderShiftTmp - thresh)) / (x4 - (400.0 + newSliderShiftTmp - thresh)) * (thresh - y4);
+    compLine.startNewSubPath(x1, y1);
+    compLine.lineTo(x2, y2);
+    //g.setColour(juce::Colours::blue);
+    //compLine.lineTo(400.0 - thresh, thresh);
+    //g.setColour(juce::Colours::green);
+    //compLine.lineTo(x3, y3);
+    //g.setColour(juce::Colours::yellow);
+    //if (!(x3 < 0.0 || x3 > 400.0 + newSliderShiftTmp || y3 < 0.0 || y3 > 400.0 + newSliderShiftTmp))
+    //if (x3 >= 0.0 && x3 <= 400.0 + newSliderShiftTmp && y3 >= 0.0 && y3 <= 400.0 + newSliderShiftTmp)
+    if (!std::isnan(x3) && !isnan(y3))
+        compLine.quadraticTo(400.0 + newSliderShiftTmp - thresh, thresh, x3, y3);
+    compLine.lineTo(x4, y4);
+    g.strokePath(compLine, juce::PathStrokeType(1.5f));
+
+    g.restoreState();
+
+    g.setColour(cBackground);
+    g.fillRect(0, graphSideLength, graphSideLength, 200);
+    g.fillRect(graphSideLength, 0, 200, 670);
+
     g.setColour(cGrid);
     /*for (int i = 1; i < 5; i++)
     {
@@ -235,55 +292,61 @@ void Comp4AudioProcessorEditor::paint (juce::Graphics& g)
     g.drawFittedText("Gain", bars[6]->getX(), 10, 30, 20, juce::Justification::centred, 1);
 
 
-    // threshold line
-    g.setColour(cThreshLine);
-    int threshLineHeight = std::round(-1.0 * sliders[1]->getValue() / 60.0 * graphSideLength);
-    g.drawLine(juce::Line<float>(juce::Point<float>(0, threshLineHeight), juce::Point<float>(400 + newSliderShiftTmp, threshLineHeight)), 1.0f);
+    //// threshold line
+    //g.setColour(cThreshLine);
+    //int threshLineHeight = std::round(-1.0 * sliders[1]->getValue() / 60.0 * graphSideLength);
+    //g.drawLine(juce::Line<float>(juce::Point<float>(0, threshLineHeight), juce::Point<float>(400 + newSliderShiftTmp, threshLineHeight)), 1.0f);
 
-    // comp line
-    g.saveState();
-    g.reduceClipRegion(0, 0, 400 + newSliderShiftTmp, 400 + newSliderShiftTmp);
-    g.setColour(cCompLine);
-    compLine.clear();
-    float x1, y1, x2, y2, x3, y3, x4, y4;
-    //double thresh = -1.0 * sliders[1]->getValue() / 60.0 * 400.0;
-    double thresh = -1.0 * sliders[1]->getValue() / 60.0 * (400.0 + newSliderShiftTmp);
-
-    if (bDownward.getToggleState())
-    {
-        x1 = std::max(400.0 + newSliderShiftTmp - thresh - (400.0 + newSliderShiftTmp - thresh) * sliders[0]->getValue(), 0.0);
-        y1 = std::min(thresh + (400.0 + newSliderShiftTmp - thresh) / sliders[0]->getValue(), 400.0 + newSliderShiftTmp);
-        x4 = 400.0f + newSliderShiftTmp;
-        y4 = 0.0f;
-    }
-    else
-    {
-        x1 = 0.0f;
-        y1 = 400.0f + newSliderShiftTmp;
-        x4 = std::min(400 + newSliderShiftTmp - thresh + thresh * sliders[0]->getValue(), 400.0 + newSliderShiftTmp);
-        y4 = std::max(thresh - thresh / sliders[0]->getValue(), 0.0);
-    }
-    double knee = sliders[2]->getValue() / 60.0 * (400.0 + newSliderShiftTmp);
-    x2 = 400 + newSliderShiftTmp - thresh - knee / 2;
-    x3 = 400 + newSliderShiftTmp - thresh + knee / 2;
-    //y2 = thresh + (thresh - x2) / thresh * (400 - thresh);
-    //y3 = thresh - (x3 - thresh) / (400 - thresh) * thresh;
-    //y2 = std::min(thresh + (400.0 - thresh - x2) / (400.0 - thresh - x1) * (y1 - thresh), 400.0);
-    y2 = thresh + (400.0 + newSliderShiftTmp - thresh - x2) / (400.0 + newSliderShiftTmp - thresh - x1) * (y1 - thresh), 400.0 + newSliderShiftTmp;
-    y3 = thresh - (x3 - (400.0 + newSliderShiftTmp - thresh)) / (x4 - (400.0 + newSliderShiftTmp - thresh)) * (thresh - y4);
-    compLine.startNewSubPath(x1, y1);
-    compLine.lineTo(x2, y2);
-    //g.setColour(juce::Colours::blue);
-    //compLine.lineTo(400.0 - thresh, thresh);
-    //g.setColour(juce::Colours::green);
-    //compLine.lineTo(x3, y3);
-    //g.setColour(juce::Colours::yellow);
-    if (!(x3 < 0.0 || x3 > 400.0 + newSliderShiftTmp || y3 < 0.0 || y3 > 400.0 + newSliderShiftTmp))
-        compLine.quadraticTo(400.0 + newSliderShiftTmp - thresh, thresh, x3, y3);
-    compLine.lineTo(x4, y4);
-    g.strokePath(compLine, juce::PathStrokeType(1.5f));
-    
-    g.restoreState();
+    //// comp line
+    //g.saveState();
+    ////g.reduceClipRegion(0, 0, 400 + newSliderShiftTmp, 400 + newSliderShiftTmp);
+    //g.setColour(cCompLine);
+    //compLine.clear();
+    //float x1, y1, x2, y2, x3, y3, x4, y4;
+    ////double thresh = -1.0 * sliders[1]->getValue() / 60.0 * 400.0;
+    //double thresh = -1.0 * sliders[1]->getValue() / 60.0 * (400.0 + newSliderShiftTmp);
+    //
+    //if (bDownward.getToggleState())
+    //{
+    //    x1 = std::max(400.0 + newSliderShiftTmp - thresh - (400.0 + newSliderShiftTmp - thresh) * sliders[0]->getValue(), 0.0);
+    //    y1 = std::min(thresh + (400.0 + newSliderShiftTmp - thresh) / sliders[0]->getValue(), 400.0 + newSliderShiftTmp);
+    //    x4 = 400.0f + newSliderShiftTmp;
+    //    y4 = 0.0f;
+    //}
+    //else
+    //{
+    //    x1 = 0.0f;
+    //    y1 = 400.0f + newSliderShiftTmp;
+    //    x4 = std::min(400 + newSliderShiftTmp - thresh + thresh * sliders[0]->getValue(), 400.0 + newSliderShiftTmp);
+    //    y4 = std::max(thresh - thresh / sliders[0]->getValue(), 0.0);
+    //}
+    //double knee = sliders[2]->getValue() / 60.0 * (400.0 + newSliderShiftTmp);
+    //x2 = 400 + newSliderShiftTmp - thresh - knee / 2;
+    //x3 = 400 + newSliderShiftTmp - thresh + knee / 2;
+    ////y2 = thresh + (thresh - x2) / thresh * (400 - thresh);
+    ////y3 = thresh - (x3 - thresh) / (400 - thresh) * thresh;
+    ////y2 = std::min(thresh + (400.0 - thresh - x2) / (400.0 - thresh - x1) * (y1 - thresh), 400.0);
+    //y2 = thresh + (400.0 + newSliderShiftTmp - thresh - x2) / (400.0 + newSliderShiftTmp - thresh - x1) * (y1 - thresh), 400.0 + newSliderShiftTmp;
+    //y3 = thresh - (x3 - (400.0 + newSliderShiftTmp - thresh)) / (x4 - (400.0 + newSliderShiftTmp - thresh)) * (thresh - y4);
+    //compLine.startNewSubPath(x1, y1);
+    //compLine.lineTo(x2, y2);
+    ////g.setColour(juce::Colours::blue);
+    ////compLine.lineTo(400.0 - thresh, thresh);
+    ////g.setColour(juce::Colours::green);
+    ////compLine.lineTo(x3, y3);
+    ////g.setColour(juce::Colours::yellow);
+    ////if (!(x3 < 0.0 || x3 > 400.0 + newSliderShiftTmp || y3 < 0.0 || y3 > 400.0 + newSliderShiftTmp))
+    ////if (x3 >= 0.0 && x3 <= 400.0 + newSliderShiftTmp && y3 >= 0.0 && y3 <= 400.0 + newSliderShiftTmp)
+    //if (!std::isnan(x3) && !isnan(y3))
+    //    compLine.quadraticTo(400.0 + newSliderShiftTmp - thresh, thresh, x3, y3);
+    //compLine.lineTo(x4, y4);
+    //g.strokePath(compLine, juce::PathStrokeType(1.5f));
+    //
+    //g.restoreState();
+    //
+    //g.setColour(cBackground);
+    //g.fillRect(0, graphSideLength, graphSideLength, 200);
+    //g.fillRect(graphSideLength, 0, 200, 670);
 
     // some labels
     g.setFont(15.0f);
