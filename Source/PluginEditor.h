@@ -145,6 +145,8 @@ private:
     void Comp4SetBar(juce::Slider* slider, int type);
     double Comp4SignaltoRMSdb(std::vector<double>& signal);
     double Comp4Signaltodb(double signal);
+    void Comp4RestoreParams();
+    void Comp4ButtonOptics();
 
     //int debugCurrentFunctionIndex = 0;
 

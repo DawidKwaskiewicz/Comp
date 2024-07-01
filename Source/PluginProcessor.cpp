@@ -47,6 +47,9 @@ Comp4AudioProcessor::Comp4AudioProcessor()
     previousInputGain = 0.0;
     previousSidechainGain = 0.0;
     previousOutputGain = 0.0;
+    inputGainLin = 0.0;
+    outputGainLin = 0.0;
+    sidechainGainLin = 0.0;
     sampleRate = 48000.0;
     //attackSamples = std::round(attack * sampleRate * 0.001);
     //releaseSamples = std::round(release * sampleRate * 0.001);

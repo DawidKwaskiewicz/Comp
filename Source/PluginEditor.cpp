@@ -102,6 +102,7 @@ Comp4AudioProcessorEditor::Comp4AudioProcessorEditor (Comp4AudioProcessor& p)
         Comp4SetBar(bars[i], barTypes[i]);
     }
 
+    Comp4RestoreParams();
 
     setSize(600 + newSliderShiftTmp, 600 + newSliderShiftTmp);
 }
@@ -456,9 +457,10 @@ void Comp4AudioProcessorEditor::sliderValueChanged(juce::Slider* slider)
     audioProcessor.thresh = sliders[1]->getValue();
     audioProcessor.knee = sliders[2]->getValue();
     audioProcessor.previousInputGain = audioProcessor.inputGain;
+    audioProcessor.inputGainLin = sliders[3]->getValue();
     audioProcessor.inputGain = audioProcessor.Comp4DecibelsToAmplitude(sliders[3]->getValue());
     audioProcessor.previousOutputGain = audioProcessor.outputGain;
-    //audioProcessor.outputGain = sliders[4]->getValue();
+    audioProcessor.outputGainLin = sliders[4]->getValue();
     audioProcessor.outputGain = audioProcessor.Comp4DecibelsToAmplitude(sliders[4]->getValue());
     audioProcessor.attack = sliders[5]->getValue();
     audioProcessor.release = sliders[6]->getValue();
@@ -466,7 +468,7 @@ void Comp4AudioProcessorEditor::sliderValueChanged(juce::Slider* slider)
     audioProcessor.lookAhead = sliders[8]->getValue();
     audioProcessor.rmsWindowLength = sliders[9]->getValue();
     audioProcessor.previousSidechainGain = audioProcessor.sidechainGain;
-    //audioProcessor.sidechainInputGain = sliders[10]->getValue();
+    audioProcessor.sidechainGainLin = sliders[10]->getValue();
     audioProcessor.sidechainGain = audioProcessor.Comp4DecibelsToAmplitude(sliders[10]->getValue());
     audioProcessor.sidechainHP = sliders[11]->getValue();
     audioProcessor.sidechainLP = sliders[12]->getValue();
@@ -490,38 +492,8 @@ void Comp4AudioProcessorEditor::onStateSwitch()
     audioProcessor.sidechainListen = bSidechainListen.getToggleState();
     audioProcessor.sidechainMuteInput = bSidechainMuteInput.getToggleState();
     
-    if (bSidechainEnable.getToggleState())
-    {
-        bSidechainEnable.setButtonText("On");
-        bSidechainEnable.setTooltip("Disable sidechain");
-    }
-    else
-    {
-        bSidechainEnable.setButtonText("Off");
-        bSidechainEnable.setTooltip("Enable sidechain");
-    }
-
-    if (bSidechainListen.getToggleState())
-    {
-        bSidechainListen.setImages(false, true, false, juce::ImageCache::getFromMemory(BinaryData::Speaker_Icon_svg_png, BinaryData::Speaker_Icon_svg_pngSize),
-            0.5f, juce::Colours::transparentBlack, juce::Image(), 0.5f, juce::Colours::transparentBlack, juce::Image(), 0.5f, juce::Colours::transparentBlack);
-        bSidechainListen.setTooltip("Mute sidechain input");
-    }
-    else
-    {
-        bSidechainListen.setImages(false, true, false, juce::ImageCache::getFromMemory(BinaryData::Mute_Icon_svg_png, BinaryData::Mute_Icon_svg_pngSize),
-            0.5f, juce::Colours::transparentBlack, juce::Image(), 0.5f, juce::Colours::transparentBlack, juce::Image(), 0.5f, juce::Colours::transparentBlack);
-        bSidechainListen.setTooltip("Listen to sidechain input");
-    }
-
-    if (bSidechainMuteInput.getToggleState())
-    {
-        bSidechainMuteInput.setTooltip("Unmute main input signal");
-    }
-    else
-    {
-        bSidechainMuteInput.setTooltip("Mute main input signal");
-    }
+    Comp4ButtonOptics();
+    
     repaint();
 }
 
@@ -545,7 +517,7 @@ void Comp4AudioProcessorEditor::Comp4SetMainSlider(juce::Slider* slider, int ind
     }
     slider->setTextValueSuffix(suffix);
     slider->setSkewFactorFromMidPoint(mid);
-    slider->setValue(start);
+    //slider->setValue(start);
     slider->addListener(this);
     this->addAndMakeVisible(slider);
 }
@@ -630,6 +602,65 @@ double Comp4AudioProcessorEditor::Comp4Signaltodb(double signal)
     //debugCurrentFunctionIndex = 11;
     audioProcessor.debugCurrentFunctionIndexEditor = 11;
     return 20.0 * std::log10(std::abs(signal));
+}
+
+void Comp4AudioProcessorEditor::Comp4RestoreParams()
+{
+    sliders[0]->setValue(audioProcessor.ratio, juce::NotificationType::dontSendNotification);
+    sliders[1]->setValue(audioProcessor.thresh, juce::NotificationType::dontSendNotification);
+    sliders[2]->setValue(audioProcessor.knee, juce::NotificationType::dontSendNotification);
+    sliders[3]->setValue(audioProcessor.inputGainLin, juce::NotificationType::dontSendNotification);
+    sliders[4]->setValue(audioProcessor.outputGainLin, juce::NotificationType::dontSendNotification);
+    sliders[5]->setValue(audioProcessor.attack, juce::NotificationType::dontSendNotification);
+    sliders[6]->setValue(audioProcessor.release, juce::NotificationType::dontSendNotification);
+    sliders[7]->setValue(audioProcessor.hold, juce::NotificationType::dontSendNotification);
+    sliders[8]->setValue(audioProcessor.lookAhead, juce::NotificationType::dontSendNotification);
+    sliders[9]->setValue(audioProcessor.rmsWindowLength, juce::NotificationType::dontSendNotification);
+    sliders[10]->setValue(audioProcessor.sidechainGainLin, juce::NotificationType::dontSendNotification);
+    sliders[11]->setValue(audioProcessor.sidechainHP, juce::NotificationType::dontSendNotification);
+    sliders[12]->setValue(audioProcessor.sidechainLP, juce::NotificationType::dontSendNotification);
+    bDownward.setToggleState(audioProcessor.downward, juce::NotificationType::dontSendNotification);
+    bSidechainEnable.setToggleState(audioProcessor.sidechainEnable, false);
+    bSidechainListen.setToggleState(audioProcessor.sidechainListen, false);
+    bSidechainMuteInput.setToggleState(audioProcessor.sidechainMuteInput, false);
+    Comp4ButtonOptics();
+    repaint();
+}
+
+void Comp4AudioProcessorEditor::Comp4ButtonOptics()
+{
+    if (bSidechainEnable.getToggleState())
+    {
+        bSidechainEnable.setButtonText("On");
+        bSidechainEnable.setTooltip("Disable sidechain");
+    }
+    else
+    {
+        bSidechainEnable.setButtonText("Off");
+        bSidechainEnable.setTooltip("Enable sidechain");
+    }
+
+    if (bSidechainListen.getToggleState())
+    {
+        bSidechainListen.setImages(false, true, false, juce::ImageCache::getFromMemory(BinaryData::Speaker_Icon_svg_png, BinaryData::Speaker_Icon_svg_pngSize),
+            0.5f, juce::Colours::transparentBlack, juce::Image(), 0.5f, juce::Colours::transparentBlack, juce::Image(), 0.5f, juce::Colours::transparentBlack);
+        bSidechainListen.setTooltip("Mute sidechain input");
+    }
+    else
+    {
+        bSidechainListen.setImages(false, true, false, juce::ImageCache::getFromMemory(BinaryData::Mute_Icon_svg_png, BinaryData::Mute_Icon_svg_pngSize),
+            0.5f, juce::Colours::transparentBlack, juce::Image(), 0.5f, juce::Colours::transparentBlack, juce::Image(), 0.5f, juce::Colours::transparentBlack);
+        bSidechainListen.setTooltip("Listen to sidechain input");
+    }
+
+    if (bSidechainMuteInput.getToggleState())
+    {
+        bSidechainMuteInput.setTooltip("Unmute main input signal");
+    }
+    else
+    {
+        bSidechainMuteInput.setTooltip("Mute main input signal");
+    }
 }
 
 

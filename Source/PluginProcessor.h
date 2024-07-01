@@ -62,6 +62,8 @@ public:
     bool downward, sidechainEnable, sidechainListen, sidechainMuteInput;
     // previous gain values for each pair of channels, used for applying gain ramps to avoid clicks
     double previousInputGain, previousSidechainGain, previousOutputGain;
+    // Linear gain values for each pair of channels, used for restoring parameters to GUI when closing and reopening a window.
+    double inputGainLin, outputGainLin, sidechainGainLin;
     // total number of samples for each timing parameter
     //int attackSamples, releaseSamples, holdSamples, lookAheadSamples, rmsWindowSamples;
     int holdSamples, lookAheadSamples, rmsWindowSamples;
