@@ -548,6 +548,7 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             if (gainReduction > previousGainReduction) gainReduction = previousGainReduction + maxReleaseGainPerSample;
             else gainReduction = previousGainReduction - maxReleaseGainPerSample;
         }
+        //jassert(gainReduction > -1);
         previousGainReduction = gainReduction;
 
         //s = s >= 0 ? Comp4DecibelsToAmplitude(currentThresh + (sdb - currentThresh) / currentRatio) :
@@ -1024,24 +1025,25 @@ double Comp4AudioProcessor::Comp4AmplitudeToDecibels(float signal)
 void Comp4AudioProcessor::Comp4UpdateBezier(double inputdb)
 {
     debugCurrentFunctionIndexProcessor = 12;
+    double kneehalf = knee / 2.0;
     // X coordinates of three given points of the bezier curve being the knee of the compression graph
-    double x1 = thresh - knee;
+    double x1 = thresh - kneehalf;
     double x2 = thresh;
-    double x3 = thresh + knee;
+    double x3 = thresh + kneehalf;
     // Calculated from Bezier curve formula for x coordinate after solving for t
-    double t = (thresh - knee - inputdb) / (-2.0 * knee);
+    double t = (thresh - kneehalf - inputdb) / (-2.0 * kneehalf);
     // Y coordinates of three given points
     double y1, y2, y3, y;
     y2 = thresh;
     if (!downward)
     {
-        y1 = thresh - knee;
-        y3 = y2 + knee / ratio;
+        y1 = thresh - kneehalf;
+        y3 = y2 + kneehalf / ratio;
     }
     else
     {
-        y3 = thresh + knee;
-        y1 = y2 - knee / ratio;
+        y3 = thresh + kneehalf;
+        y1 = y2 - kneehalf / ratio;
     }
 
     // Y coordinate of the curve for x = inputdb
@@ -1050,13 +1052,16 @@ void Comp4AudioProcessor::Comp4UpdateBezier(double inputdb)
     double yprim = 2.0 * (1.0 - t) * (y2 - y1) + 2.0 * t * (y3 - y2);
     // Dividing the derivatives gives us the slope of the tangent line in point (inputdb, y), which is by definition the (instantaneous) compression ratio
     // (the compression graph no longer consists only of straight lines, and because of that both the ratio and the threshold change dynamically in the region of the knee)
-    bezierRatio = yprim / xprim;
+    double beziera = yprim / xprim;
+    bezierRatio = 1 / beziera;
     // Coefficient b in formula of the tangent line (y = ax + b), needed for calculating the instantaneous threshold
     // (as the values below the chosen threshold are now being processed (half of the knee in x-axis), the threshold for those values needs to be adjusted)
-    double bezierb = y - bezierRatio * inputdb;
-    // Using both coefficients (a = bezierRatio, b = bezierb) we calculate the y coordinate of the point in which the bezier curve intersects the y = x line (the uncompressed part of the signal)
+    double bezierb = y - beziera * inputdb;
+    // Using both coefficients (a = bezierRatio, b = bezierb) we calculate the y coordinate of the point in which the tangent line intersects the y = x line (the uncompressed part of the signal)
     // That coordinate is the isntantaneous threshold
-    bezierThresh = bezierb / (1.0 - bezierRatio);
+    bezierThresh = bezierb / (1.0 - beziera);
+    jassert((bezierRatio >= ratio && bezierRatio <= 1) || (bezierRatio <= ratio && bezierRatio >= 1));
+    jassert(bezierThresh >= x1 && bezierThresh <= x2);
     return;
 }
 void Comp4AudioProcessor::clear(std::queue<int>& q)
