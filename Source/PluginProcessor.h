@@ -128,11 +128,11 @@ public:
     //bool previousSamplePositive[2];
     // Difference in value between currently processed sample and previous sample (post-processing), used for applying attack, hold and release by capping this difference appropriately.
     //double previousSampleDifference;
-    // Value of currently processed sample from the main input channel.
+    // Value of currently processed samples (L&R) from the main input channel.
     // float* s;
-    float s;
-    // Value of currently processed sample from the main input channel converted to dBFS.
-    double sdb;
+    float s[2];
+    // Value of currently processed samples (L&R) from the main input channel converted to dBFS.
+    double sdb[2];
     // Depending on sidechain being enabled, either value of currently processed sample from the main input channel or sidechain channel converted to dBFS.
     //double sdbkey;
     // Decibel value of RMS value of currently processed L & R sample from the main input.

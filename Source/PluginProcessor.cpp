@@ -419,8 +419,8 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             rmsSquareSum -= rmsValueToRemove * rmsValueToRemove;
             rmsQueues[channel].pop();
             //channelsData[channel + 2][smp] *= sidechainGainLin;
-            s = memoryBuffer[channel].front();
-            sdb = Comp4AmplitudeToDecibels(s);
+            s[channel] = memoryBuffer[channel].front();
+            sdb[channel] = Comp4AmplitudeToDecibels(s[channel]);
             //int rmsNewValueIndex = smp + rmsOffsetInSamples;
             //sdbkey = sidechainEnable ? Comp4AmplitudeToDecibels(channelsData[channel + 2][smp]) : sdb;
             if (sidechainEnable)
@@ -551,7 +551,7 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             if (gainReduction > previousGainReduction) gainReduction = previousGainReduction + maxReleaseGainPerSample;
             else gainReduction = previousGainReduction - maxReleaseGainPerSample;
         }
-        //jassert(gainReduction > -1);
+        //jassert(gainReduction > -20);
         previousGainReduction = gainReduction;
 
         //s = s >= 0 ? Comp4DecibelsToAmplitude(currentThresh + (sdb - currentThresh) / currentRatio) :
@@ -676,14 +676,15 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         // }
         for (int channel = 0; channel < 2; ++channel)
         {
-            s = s >= 0 ? Comp4DecibelsToAmplitude(sdb - gainReduction) : -1.0 * Comp4DecibelsToAmplitude(sdb - gainReduction);
-            jassert(!std::isnan(s));
+            s[channel] = s[channel] >= 0 ? Comp4DecibelsToAmplitude(sdb[channel] - gainReduction) : -1.0 * Comp4DecibelsToAmplitude(sdb[channel] - gainReduction);
+            jassert(!std::isnan(s[channel]));
             if (pluginWindowOpen)
             {
                 //currentValues[channel].push_back(originalValues[channel]);
+                //jassert(memoryBuffer[channel].front() < 0.1);
                 currentValues[channel].push_back(memoryBuffer[channel].front());
                 if (sidechainChannelsExist) currentValues[channel + 2].push_back(memoryBuffer[channel + 2].front());
-                currentValues[channel + 4].push_back(s);
+                currentValues[channel + 4].push_back(s[channel]);
             }
 
             //if (smp % 100 == 0) DBG(currentValues[channel][smp] - originalValues[channel]);
@@ -711,13 +712,13 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             //channelsData[channel][smp] = !sidechainMuteInput * memoryBuffer[channel].front() + sidechainListen * memoryBuffer[channel + 2].front();
             if (sidechainChannelsExist)
             {
-                channelsData[channel][smp] = !sidechainMuteInput * s + sidechainListen * memoryBuffer[channel + 2].front();
+                channelsData[channel][smp] = !sidechainMuteInput * s[channel] + sidechainListen * memoryBuffer[channel + 2].front();
                 memoryBuffer[channel].pop_front();
                 memoryBuffer[channel + 2].pop_front();
             }
             else
             {
-                channelsData[channel][smp] = !sidechainMuteInput * s;
+                channelsData[channel][smp] = !sidechainMuteInput * s[channel];
                 memoryBuffer[channel].pop_front();
             }
 
