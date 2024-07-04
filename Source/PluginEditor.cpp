@@ -24,7 +24,8 @@ Comp4AudioProcessorEditor::Comp4AudioProcessorEditor (Comp4AudioProcessor& p)
 
     //setSize(600, 600);
 
-    Timer::startTimer(barTimerIntervalms);
+    //Timer::startTimer(barTimerIntervalms);
+    Timer::startTimer(starts[9]);
 
     //Comp4SetMainSlider(&sRatio, 0, 1, 0.0, 30.0, 3.0, 1.0, "");
 
@@ -32,7 +33,8 @@ Comp4AudioProcessorEditor::Comp4AudioProcessorEditor (Comp4AudioProcessor& p)
     for (int i = 0; i < indicesX.size(); i++)
     {
         sliders.add(new juce::Slider(codeNames[i]));
-        Comp4SetMainSlider(sliders[i], indicesX[i], indicesY[i], mins[i], maxs[i], mids[i], starts[i], steps[i], suffixes[i]);
+        //Comp4SetMainSlider(sliders[i], indicesX[i], indicesY[i], mins[i], maxs[i], mids[i], starts[i], steps[i], suffixes[i]);
+        Comp4SetMainSlider(i);
         labels.add(new juce::Label({}, names[i]));
         labels[i]->setJustificationType(juce::Justification::centredBottom);
         if (i == 3 || i == 4 || i == 9 || i == 10 || i == 11 || i == 12)
@@ -46,6 +48,17 @@ Comp4AudioProcessorEditor::Comp4AudioProcessorEditor (Comp4AudioProcessor& p)
         else labels[i]->attachToComponent(sliders[i], false);
         this->addAndMakeVisible(labels[i]);
     }
+
+    sliders[9]->textFromValueFunction = [](double value)
+        {
+            if (value == 0.0) return juce::String("Peak");
+            return juce::String(value) + " ms";
+        };
+    sliders[9]->valueFromTextFunction = [](const juce::String& text)
+        {
+            if (text == "Peak") return 0.0;
+            return text.getDoubleValue();
+        };
     
     //0 - sInputL
     //1 - sInputR
@@ -101,6 +114,12 @@ Comp4AudioProcessorEditor::Comp4AudioProcessorEditor (Comp4AudioProcessor& p)
         bars.add(new juce::Slider(barsCodeNames[i]));
         Comp4SetBar(bars[i], barTypes[i]);
     }
+    barsPreviousValues[0] = -60.0;
+    barsPreviousValues[1] = -60.0;
+    barsPreviousValues[2] = -60.0;
+    barsPreviousValues[3] = -60.0;
+    barsPreviousValues[4] = -60.0;
+    barsPreviousValues[5] = -60.0;
 
     Comp4RestoreParams();
 
@@ -467,6 +486,7 @@ void Comp4AudioProcessorEditor::sliderValueChanged(juce::Slider* slider)
     audioProcessor.hold = sliders[7]->getValue();
     audioProcessor.lookAhead = sliders[8]->getValue();
     audioProcessor.rmsWindowLength = sliders[9]->getValue();
+    Timer::startTimer(audioProcessor.rmsWindowLength);
     audioProcessor.previousSidechainGain = audioProcessor.sidechainGain;
     audioProcessor.sidechainGainLin = sliders[10]->getValue();
     audioProcessor.sidechainGain = audioProcessor.Comp4DecibelsToAmplitude(sliders[10]->getValue());
@@ -497,29 +517,54 @@ void Comp4AudioProcessorEditor::onStateSwitch()
     repaint();
 }
 
-void Comp4AudioProcessorEditor::Comp4SetMainSlider(juce::Slider* slider, int indexX, int indexY, double min, double max, double mid, double start, double step, std::string suffix)
+//void Comp4AudioProcessorEditor::Comp4SetMainSlider(juce::Slider* slider, int indexX, int indexY, double min, double max, double mid, double start, double step, std::string suffix)
+//{
+//    //std::cout << "Comp4SetMainSlider\n";
+//    //debugCurrentFunctionIndex = 7;
+//    audioProcessor.debugCurrentFunctionIndexEditor = 7;
+//    //SliderLookAndFeel slf;
+//    slider->setColour(juce::Slider::textBoxBackgroundColourId, cSliderTextboxBackground);
+//    slider->setColour(juce::Slider::textBoxOutlineColourId, cSliderTextboxBackground);
+//    slider->setColour(juce::Slider::textBoxTextColourId, cSliderTextboxText);
+//    slider->setSliderStyle(juce::Slider::RotaryVerticalDrag);
+//    slider->setRange(min, max, step);
+//    if (indexX != 5)
+//        slider->setTextBoxStyle(juce::Slider::TextBoxBelow, false, 65, 20);
+//    else
+//    {
+//        slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 65, 20);
+//        //slider->setTooltip(tooltips[indexY + 6]);
+//    }
+//    slider->setTextValueSuffix(suffix);
+//    slider->setSkewFactorFromMidPoint(mid);
+//    //slider->setValue(start);
+//    slider->addListener(this);
+//    this->addAndMakeVisible(slider);
+//}
+
+void Comp4AudioProcessorEditor::Comp4SetMainSlider(int index)
 {
     //std::cout << "Comp4SetMainSlider\n";
     //debugCurrentFunctionIndex = 7;
     audioProcessor.debugCurrentFunctionIndexEditor = 7;
     //SliderLookAndFeel slf;
-    slider->setColour(juce::Slider::textBoxBackgroundColourId, cSliderTextboxBackground);
-    slider->setColour(juce::Slider::textBoxOutlineColourId, cSliderTextboxBackground);
-    slider->setColour(juce::Slider::textBoxTextColourId, cSliderTextboxText);
-    slider->setSliderStyle(juce::Slider::RotaryVerticalDrag);
-    slider->setRange(min, max, step);
-    if (indexX != 5)
-        slider->setTextBoxStyle(juce::Slider::TextBoxBelow, false, 65, 20);
+    sliders[index]->setColour(juce::Slider::textBoxBackgroundColourId, cSliderTextboxBackground);
+    sliders[index]->setColour(juce::Slider::textBoxOutlineColourId, cSliderTextboxBackground);
+    sliders[index]->setColour(juce::Slider::textBoxTextColourId, cSliderTextboxText);
+    sliders[index]->setSliderStyle(juce::Slider::RotaryVerticalDrag);
+    sliders[index]->setRange(mins[index], maxs[index], steps[index]);
+    if (indicesX[index] != 5)
+        sliders[index]->setTextBoxStyle(juce::Slider::TextBoxBelow, false, 65, 20);
     else
     {
-        slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 65, 20);
+        sliders[index]->setTextBoxStyle(juce::Slider::TextBoxRight, false, 65, 20);
         //slider->setTooltip(tooltips[indexY + 6]);
     }
-    slider->setTextValueSuffix(suffix);
-    slider->setSkewFactorFromMidPoint(mid);
+    if (index != 9) sliders[index]->setTextValueSuffix(suffixes[index]);
+    sliders[index]->setSkewFactorFromMidPoint(mids[index]);
     //slider->setValue(start);
-    slider->addListener(this);
-    this->addAndMakeVisible(slider);
+    sliders[index]->addListener(this);
+    this->addAndMakeVisible(sliders[index]);
 }
 
 void Comp4AudioProcessorEditor::Comp4SetBar(juce::Slider* slider, int type)
@@ -567,7 +612,7 @@ void Comp4AudioProcessorEditor::timerCallback()
 
         //bars[i]->setValue(Comp4SignaltoRMSdb(audioProcessor.currentValues[i]));
 
-        double tmp = Comp4SignaltoRMSdb(audioProcessor.currentValues[i]);
+        double tmp = Comp4SignaltoRMSdb(audioProcessor.currentValues[i], i, sliders[9]->getValue() == 0);
         //jassert(!std::isnan(tmp));
         bars[i]->setValue(tmp);
 
@@ -579,12 +624,19 @@ void Comp4AudioProcessorEditor::timerCallback()
 }
 
 //double Comp4AudioProcessorEditor::Comp4SignaltoRMSdb(std::vector<double>& signal)
-double Comp4AudioProcessorEditor::Comp4SignaltoRMSdb(std::vector<double>& signal)
+double Comp4AudioProcessorEditor::Comp4SignaltoRMSdb(std::vector<double>& signal, int barIndex, bool peak)
 {
     //std::cout << "Comp4SignaltoRMSdb\n";
     //debugCurrentFunctionIndex = 10;
     audioProcessor.debugCurrentFunctionIndexEditor = 10;
-    if (signal.empty()) return -60.0;
+    //if (signal.empty()) return -60.0;
+    if (signal.empty()) return barsPreviousValues[barIndex];
+    if (peak)
+    {
+        //barsPreviousValues[barIndex] = *std::max_element(signal.begin(), signal.end());
+        barsPreviousValues[barIndex] = Comp4GetMaxdBValue(signal);
+        return barsPreviousValues[barIndex];
+    }
     double sum = 0;
     int elemCount = signal.size();
     for (int i = 0; i < elemCount; i++)
@@ -592,7 +644,9 @@ double Comp4AudioProcessorEditor::Comp4SignaltoRMSdb(std::vector<double>& signal
         sum += signal[i] * signal[i];
     }
     sum /= elemCount;
-    return 10.0 * std::log10(sum);
+    barsPreviousValues[barIndex] = 10.0 * std::log10(sum);
+    return barsPreviousValues[barIndex];
+    //return 10.0 * std::log10(sum);
     //return -30.0f;
 }
 
@@ -661,6 +715,18 @@ void Comp4AudioProcessorEditor::Comp4ButtonOptics()
     {
         bSidechainMuteInput.setTooltip("Mute main input signal");
     }
+}
+
+double Comp4AudioProcessorEditor::Comp4GetMaxdBValue(std::vector<double>& signal)
+{
+    double maxValue = 0;
+    double value = 0;
+    for (int i = 0; i < signal.size(); i++)
+    {
+        value = std::abs(signal[i]);
+        if (value > maxValue) maxValue = value;
+    }
+    return 20.0 * std::log10(maxValue);
 }
 
 

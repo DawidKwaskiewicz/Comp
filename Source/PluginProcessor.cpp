@@ -1065,7 +1065,7 @@ void Comp4AudioProcessor::Comp4UpdateBezier(double inputdb)
     // That coordinate is the isntantaneous threshold
     bezierThresh = bezierb / (1.0 - beziera);
     jassert((bezierRatio >= ratio && bezierRatio <= 1) || (bezierRatio <= ratio && bezierRatio >= 1));
-    jassert(bezierThresh >= x1 && bezierThresh <= x2);
+    jassert(bezierThresh >= x1 && bezierThresh <= x3);
     return;
 }
 void Comp4AudioProcessor::clear(std::queue<int>& q)

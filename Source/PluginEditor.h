@@ -117,6 +117,7 @@ private:
     std::vector<int> barTypes = { 1, 1, 1, 1, 1, 1, 2, 2 };
     float barLabelGridFont = 11.0f;
     int barTimerIntervalms = 40;
+    double barsPreviousValues[6];
 
     int callbackCounter = 0;
     std::vector<int> barCountDiff;
@@ -141,12 +142,14 @@ private:
 
     void sliderValueChanged(juce::Slider* slider) override;
     void timerCallback() override;
-    void Comp4SetMainSlider(juce::Slider* slider, int indexX, int indexY, double min, double max, double mid, double start, double step, std::string suffix);
+    //void Comp4SetMainSlider(juce::Slider* slider, int indexX, int indexY, double min, double max, double mid, double start, double step, std::string suffix);
+    void Comp4SetMainSlider(int index);
     void Comp4SetBar(juce::Slider* slider, int type);
-    double Comp4SignaltoRMSdb(std::vector<double>& signal);
+    double Comp4SignaltoRMSdb(std::vector<double>& signal, int barIndex, bool peak);
     double Comp4Signaltodb(double signal);
     void Comp4RestoreParams();
     void Comp4ButtonOptics();
+    double Comp4GetMaxdBValue(std::vector<double>& signal);
 
     //int debugCurrentFunctionIndex = 0;
 
