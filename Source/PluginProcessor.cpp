@@ -452,22 +452,25 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             //if (smp % 100 == 0) DBG(attackSamplesLeft);
             sdbkeyrms = Comp4AmplitudeToDecibels(std::sqrt(rmsSquareSum / rmsWindowSamples / 2.0));
         }
-        sdbmean = Comp4AmplitudeToDecibels(std::sqrt(memoryBuffer[0].front() * memoryBuffer[0].front() + memoryBuffer[1].front() * memoryBuffer[1].front()));
+        //sdbmean = Comp4AmplitudeToDecibels(std::sqrt(memoryBuffer[0].front() * memoryBuffer[0].front() + memoryBuffer[1].front() * memoryBuffer[1].front()));
 
-        if (ratio != 1.0 && thresh != 0.0 && !std::isinf(sdbmean))
+        //if (ratio != 1.0 && thresh != 0.0 && !std::isinf(sdbmean))
+        if (ratio != 1.0 && thresh != 0.0)
         {
             if (!downward)
             {
                 if (sdbkeyrms >= thresh + knee / 2.0)
                 {
-                    gainReduction = sdbmean - (thresh + (sdbmean - thresh) / ratio);
+                    //gainReduction = sdbmean - (thresh + (sdbmean - thresh) / ratio);
+                    gainReduction = sdbkeyrms - (thresh + (sdbkeyrms - thresh) / ratio);
                     attackPhase = true;
 
                 }
                 else if (sdbkeyrms > thresh - knee / 2.0)
                 {
                     Comp4UpdateBezier(sdbkeyrms);
-                    gainReduction = sdbmean - (bezierThresh + (sdbmean - bezierThresh) / bezierRatio);
+                    //gainReduction = sdbmean - (bezierThresh + (sdbmean - bezierThresh) / bezierRatio);
+                    gainReduction = sdbkeyrms - (bezierThresh + (sdbkeyrms - bezierThresh) / bezierRatio);
                     attackPhase = true;
                     // !!!!!!!CZY PRZECHODZENIE Z BUFORA DO BUFORA NIE NOSI ZE SOBĄ ARTEFAKTÓW?!!!!!!!
                 }
@@ -497,13 +500,15 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             {
                 if (sdbkeyrms <= thresh - knee / 2.0)
                 {
-                    gainReduction = sdbmean - (thresh - (thresh - sdbmean) / ratio);
+                    //gainReduction = sdbmean - (thresh - (thresh - sdbmean) / ratio);
+                    gainReduction = sdbkeyrms - (thresh - (thresh - sdbkeyrms) / ratio);
                     attackPhase = true;
                 }
                 else if (sdbkeyrms < thresh + knee / 2.0)
                 {
                     Comp4UpdateBezier(sdbkeyrms);
-                    gainReduction = sdbmean - (bezierThresh - (bezierThresh - sdbmean) / bezierRatio);
+                    //gainReduction = sdbmean - (bezierThresh - (bezierThresh - sdbmean) / bezierRatio);
+                    gainReduction = sdbkeyrms - (bezierThresh - (bezierThresh - sdbkeyrms) / bezierRatio);
                     attackPhase = true;
                 }
                 else
@@ -1034,6 +1039,7 @@ void Comp4AudioProcessor::Comp4UpdateBezier(double inputdb)
     double x1 = thresh - kneehalf;
     double x2 = thresh;
     double x3 = thresh + kneehalf;
+    jassert(inputdb >= x1 && inputdb <= x3);
     // Calculated from Bezier curve formula for x coordinate after solving for t
     double t = (thresh - kneehalf - inputdb) / (-2.0 * kneehalf);
     // Y coordinates of three given points
@@ -1060,12 +1066,13 @@ void Comp4AudioProcessor::Comp4UpdateBezier(double inputdb)
     bezierRatio = 1 / beziera;
     // Coefficient b in formula of the tangent line (y = ax + b), needed for calculating the instantaneous threshold
     // (as the values below the chosen threshold are now being processed (half of the knee in x-axis), the threshold for those values needs to be adjusted)
+    // Calculated by knowing the a parameter and one point [inputdb, y]
     double bezierb = y - beziera * inputdb;
     // Using both coefficients (a = bezierRatio, b = bezierb) we calculate the y coordinate of the point in which the tangent line intersects the y = x line (the uncompressed part of the signal)
     // That coordinate is the isntantaneous threshold
     bezierThresh = bezierb / (1.0 - beziera);
     jassert((bezierRatio >= ratio && bezierRatio <= 1) || (bezierRatio <= ratio && bezierRatio >= 1));
-    jassert(bezierThresh >= x1 && bezierThresh <= x3);
+    jassert((bezierThresh >= x1 && bezierThresh <= x2 && bezierThresh <= inputdb && !downward) || (bezierThresh >= x2 && bezierThresh <= x3 && bezierThresh >= inputdb && downward));
     return;
 }
 void Comp4AudioProcessor::clear(std::queue<int>& q)

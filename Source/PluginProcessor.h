@@ -136,7 +136,7 @@ public:
     // Depending on sidechain being enabled, either value of currently processed sample from the main input channel or sidechain channel converted to dBFS.
     //double sdbkey;
     // Decibel value of RMS value of currently processed L & R sample from the main input.
-    double sdbmean;
+    //double sdbmean;
     // Returns true if plugin window is currently open. Used for displaying data on bars.
     bool pluginWindowOpen = false;
     // Array of queues (L & R channels) containing values in the current RMS window. Used for calculating the moving average of values needed for estimating the current power of the signal, used in conjunction with timing parameters.
