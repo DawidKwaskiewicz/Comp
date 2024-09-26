@@ -139,36 +139,58 @@ public:
     //double sdbmean;
     // Returns true if plugin window is currently open. Used for displaying data on bars.
     bool pluginWindowOpen = false;
-    // Array of queues (L & R channels) containing values in the current RMS window. Used for calculating the moving average of values needed for estimating the current power of the signal, used in conjunction with timing parameters.
-    std::queue<float> rmsQueues[2];
+    //// Array of queues (L & R channels) containing values in the current RMS window. Used for calculating the moving average of values needed for estimating the current power of the signal, used in conjunction with timing parameters.
+    //std::queue<float> rmsQueues[2];
+    // Array of queues (main input & sidechain, L & R channels) containing values in the current RMS window. Used for calculating the moving average of values needed for estimating the current power of the signal, used in conjunction with timing parameters.
+    std::queue<float> rmsQueues[4];
+    // Array of queues storing current key input mono values modified by running average (RMS) over time described by the RMS knob.
+    std::deque<float> rmsMonoBuffers[2];
+    //std::deque<float> rmsBuffer;
+    // Array of queues storing current main and sidechain (L&R) input values modified by running average (RMS) over time described by the RMS knob.
+    std::deque<float> rmsStereoBuffers[4];
     // Returns true if sidechain was enabled/disabled since last checked (during the processing of previous block).
     bool keySignalSwitched = true;
     // Stores the previous value of key signal. True - main input, false - sidechain.
     bool keySignalPrevious = true;
+    // Describes if this is the first call to the processBlock() function.
+    bool firstCall = true;
     // Offset to each side of current value in miliseconds during calculating the moving average.
     //int rmsOffsetInMs;
     // Offset to each side of current value in samples during calculating the moving average.
     int rmsOffsetInSamples;
-    // Array of double ended queues storing the values from the previous blocks. Needed for preserving the continuity of moving average calculations and look-ahead.
-    std::deque<float> memoryBuffer[4];
+    //// Array of double ended queues storing the values from the previous blocks. Needed for preserving the continuity of moving average calculations and look-ahead.
+    //std::deque<float> memoryBuffer[4];
+    // Array of double ended queues storing main input values from the previous blocks. Needed for preserving the continuity of moving average calculations and look-ahead.
+    std::deque<float> mainInputBuffer[2];
+    // Array of double ended queues storing main input and sidechain values from the previous blocks. Needed for RMS calculations.
+    std::deque<float> rmsMemoryBuffers[4];
+    //// Array of double ended queues storing the main input raw values from the previous blocks. Needed for calculating actual value of the compressed sample (sample - calculated gain reduction).
+    //std::deque<float> mainInputBuffer[2];
     // Minimal latency in miliseconds (needed for RMS window calculations and look-ahead). Used for picking one of pre-defined latency steps.
     //double minimalLatencyInMs;
     // Minimal latency in samples (needed for RMS window calculations and look-ahead). Used for picking one of pre-defined latency steps.
     int minimalLatencyInSamples;
     // Pre-defined latency steps in miliseconds, implemented to reduce number of reported latency changes after every small adjustment.
-    int latencyStepsInMs[7] = { 1, 5, 20, 50, 100, 200, 500 };
+    //int latencyStepsInMs[7] = { 1, 5, 20, 50, 100, 200, 500 };
+    int latencyStepsInMs[7] = { 1, 5, 20, 50, 100, 200, 551 };
     // Pre-defined latency steps in samples, implemented to reduce number of reported latency changes after every small adjustment.
     int latencyStepsInSamples[7];
     // Used for checking if sample rate changed and updating latency steps.
     double sampleRate;
     // Current plugin latency in samples. Equal to one of the values in latencyStepsInSamples.
     int currentLatencyInSamples;
-    // Sum of squares of values in the current RMS window in the key signal.
-    double rmsSquareSum;
+    // Sum of squares of values in the current RMS window in main and sidechain input (stereo).
+    double rmsSquareSum[4];
+    //// Sum of squares of values in the current RMS window in main and sidechain input (mono).
+    //double rmsSquareSumMono[2];
     // Moving RMS value of currently processed sample from the key signal converted to dBFS.
     double sdbkeyrms;
     // States if there are 4 or more input channels detected.
     bool sidechainChannelsExist;
+    // Reversed buffer with gain reduction values compensated for look-ahead, but not for release.
+    std::deque<float> lookAheadValues;
+    // Debugging variable counting calls to processBlock().
+    int processBlockCallCounter = 0;
 
     int debugCurrentFunctionIndexEditor = 0;
     int debugCurrentFunctionIndexProcessor = 0;
@@ -196,6 +218,8 @@ private:
     //void Comp4UpdateLatencyMs(double newMinimalLatencyInMs);
     void Comp4UpdateLatency(double newMinimalLatencyInSamples);
     //void Comp4UnreleaseCompression();
+    //std::vector<float> Comp4GetLookAhead(std::deque<float> memoryBuffer[], int lookAheadSamples, double maxAttackGainPerSample);
+    void Comp4GetLookAhead();
 
     juce::dsp::LadderFilter<float> hpf;
     juce::dsp::LadderFilter<float> lpf;

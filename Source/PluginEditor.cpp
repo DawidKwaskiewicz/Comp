@@ -486,7 +486,7 @@ void Comp4AudioProcessorEditor::sliderValueChanged(juce::Slider* slider)
     audioProcessor.hold = sliders[7]->getValue();
     audioProcessor.lookAhead = sliders[8]->getValue();
     audioProcessor.rmsWindowLength = sliders[9]->getValue();
-    Timer::startTimer(audioProcessor.rmsWindowLength);
+    //Timer::startTimer(audioProcessor.rmsWindowLength);
     audioProcessor.previousSidechainGain = audioProcessor.sidechainGain;
     audioProcessor.sidechainGainLin = sliders[10]->getValue();
     audioProcessor.sidechainGain = audioProcessor.Comp4DecibelsToAmplitude(sliders[10]->getValue());
@@ -645,6 +645,7 @@ double Comp4AudioProcessorEditor::Comp4SignaltoRMSdb(std::vector<double>& signal
     }
     sum /= elemCount;
     barsPreviousValues[barIndex] = 10.0 * std::log10(sum);
+    jassert(!std::isnan(barsPreviousValues[barIndex]));
     return barsPreviousValues[barIndex];
     //return 10.0 * std::log10(sum);
     //return -30.0f;

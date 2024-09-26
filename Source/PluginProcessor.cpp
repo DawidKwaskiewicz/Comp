@@ -77,7 +77,10 @@ Comp4AudioProcessor::Comp4AudioProcessor()
     bezierThresh = 0.0;
     currentRatio = 1.0;
     currentThresh = 0.0;
-    rmsSquareSum = 0.0;
+    rmsSquareSum[0] = 0.0;
+    rmsSquareSum[1] = 0.0;
+    rmsSquareSum[2] = 0.0;
+    rmsSquareSum[3] = 0.0;
     sdbkeyrms = 0.0;
     attackPhase = false;
     //originalValues[0] = 0.0f;
@@ -85,6 +88,7 @@ Comp4AudioProcessor::Comp4AudioProcessor()
     pluginWindowOpen = false;
     keySignalSwitched = true;
     keySignalPrevious = true;
+    firstCall = true;
     // Comp4UpdateLatencySteps(oldSampleRate);
     // Comp4UpdateLatency(oldSampleRate, std::max(rmsWindowLength, lookAhead));
     minimalLatencyInSamples = 0;
@@ -95,10 +99,11 @@ Comp4AudioProcessor::Comp4AudioProcessor()
     latencyStepsInMs[3] = 50;
     latencyStepsInMs[4] = 100;
     latencyStepsInMs[5] = 200;
-    latencyStepsInMs[6] = 500;
+    latencyStepsInMs[6] = 551;
     Comp4UpdateLatencySteps();
     //Comp4UpdateLatency(std::max(rmsWindowLength, lookAhead));
-    Comp4UpdateLatency(std::max(rmsOffsetInSamples, lookAheadSamples));
+    //Comp4UpdateLatency(std::max(rmsOffsetInSamples, lookAheadSamples));
+    Comp4UpdateLatency(rmsOffsetInSamples + lookAheadSamples);
 }
 
 Comp4AudioProcessor::~Comp4AudioProcessor()
@@ -241,6 +246,7 @@ bool Comp4AudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) co
 void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
 {
     debugCurrentFunctionIndexProcessor = 3;
+    processBlockCallCounter++;
     //juce::ScopedNoDenormals noDenormals;
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
@@ -331,30 +337,173 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     rmsWindowSamples = std::round(rmsWindowLength * sampleRate * 0.001);
     if (rmsWindowSamples % 2 == 0) rmsWindowSamples++;
     rmsOffsetInSamples = (rmsWindowSamples - 1) / 2;
-    Comp4UpdateLatency(std::max(rmsOffsetInSamples, lookAheadSamples));
+    //Comp4UpdateLatency(std::max(rmsOffsetInSamples, lookAheadSamples));
+    Comp4UpdateLatency(rmsOffsetInSamples + lookAheadSamples);
     // releasea = (ratio * releaseSamples - ratio) / (1.0 - ratio);
     //maxAttackGainPerSample = 10.0 / attack / sampleRate * 0.001;
     //maxReleaseGainPerSample = 10.0 / release / sampleRate * 0.001;
 
-    // Passing the samples from buffer to the memoryBuffer.
-    for (int sample = 0; sample < smpNum; sample++)
+    //// If sidechain was enabled/disabled since the previous call to processBlock, rms queues are replaced with 0's, since values inside them are no longer relevant. Also called during the first execution.
+    //if (keySignalSwitched)
+    //{
+    //    keySignalSwitched = false;
+    //    rmsSquareSum = 0;
+    //    for (int channel = 0; channel < 2; channel++)
+    //    {
+    //        rmsQueues[channel] = std::queue<float>();
+    //        for (int sample = 0; sample < rmsWindowSamples; sample++)
+    //            rmsQueues[channel].push(0);
+    //    }
+    //}
+
+    // Initiating rmsQueues by filling them with 0's.
+    if (firstCall)
+    {
+        firstCall = false;
         for (int channel = 0; channel < totalNumInputChannels; channel++)
-            memoryBuffer[channel].push_back(channelsData[channel][sample]);
+        {
+            rmsQueues[channel] = std::queue<float>();
+            for (int sample = 0; sample < rmsWindowSamples; sample++)
+                rmsQueues[channel].push(0);
+        }
+    }
+
+    // Passing the samples from buffer to the processing buffer and RMS memory buffer.
+    for (int sample = 0; sample < smpNum; sample++)
+    {
+        for (int channel = 0; channel < 2; channel++)
+            mainInputBuffer[channel].push_back(channelsData[channel][sample]);
+        for (int channel = 0; channel < totalNumInputChannels; channel++)
+            rmsMemoryBuffers[channel].push_back(channelsData[channel][sample]);
+    }
+    // Filling the RMS buffers.
+    float rmsValueToRemove, rmsValueToAdd;
+    //int channelOffset = (sidechainEnable && sidechainChannelsExist) * 2;
+    //for (int sample = 0; sample < rmsMemoryBuffers[0].size() - rmsOffsetInSamples; sample++)
+    while (rmsMemoryBuffers[0].size() > currentLatencyInSamples)
+    {
+        double rmsCalculatedValue;
+        float valueSquared;
+        for (int channel = 0; channel < totalNumInputChannels; channel++)
+        {
+            //int inputNum = static_cast<int>(std::floorf(channel / 2.0));
+            if (rmsQueues[channel].size() >= rmsWindowSamples)
+            {
+                rmsValueToRemove = rmsQueues[channel].front();
+                valueSquared = rmsValueToRemove * rmsValueToRemove;
+                //if (valueSquared >= 0) rmsSquareSum[channel] -= valueSquared;
+                //rmsSquareSum[channel] -= rmsValueToRemove * rmsValueToRemove;
+                rmsSquareSum[channel] -= valueSquared;
+                //jassert(rmsSquareSum[channel] >= 0);
+                rmsQueues[channel].pop();
+            }
+            rmsValueToAdd = rmsMemoryBuffers[channel][rmsOffsetInSamples];
+            //jassert(rmsValueToAdd == 0);
+            valueSquared = rmsValueToAdd * rmsValueToAdd;
+            if (valueSquared < 0)
+            {
+                valueSquared = 0;
+                rmsValueToAdd = 0;
+            }
+            rmsQueues[channel].push(rmsValueToAdd);
+            //rmsSquareSum[channel] += rmsValueToAdd * rmsValueToAdd;
+            rmsSquareSum[channel] += valueSquared;
+            //jassert(rmsSquareSum[channel] >= 0);
+            if (rmsSquareSum[channel] < 0) rmsSquareSum[channel] = 0;
+            rmsMemoryBuffers[channel].pop_front();
+            //rmsMemoryBuffer[channel + 2].pop_front();
+            rmsCalculatedValue = std::sqrt(rmsSquareSum[channel] / rmsWindowSamples);
+            //jassert(!std::isnan(rmsCalculatedValue));
+            //rmsStereoBuffers[channel].push_back(std::sqrt(rmsSquareSum[channel] / rmsWindowSamples));
+            rmsStereoBuffers[channel].push_back(rmsCalculatedValue);
+        }
+        rmsCalculatedValue = std::sqrt((rmsSquareSum[0] + rmsSquareSum[1]) / rmsWindowSamples / 2.0);
+        jassert(!std::isnan(rmsCalculatedValue));
+        rmsMonoBuffers[0].push_back(rmsCalculatedValue);
+        rmsCalculatedValue = std::sqrt((rmsSquareSum[2] + rmsSquareSum[3]) / rmsWindowSamples / 2.0);
+        jassert(!std::isnan(rmsCalculatedValue));
+        rmsMonoBuffers[1].push_back(rmsCalculatedValue);
+        //rmsMonoBuffers[0].push_back(std::sqrt((rmsSquareSum[0] + rmsSquareSum[1]) / rmsWindowSamples / 2.0));
+        //rmsMonoBuffers[1].push_back(std::sqrt((rmsSquareSum[2] + rmsSquareSum[3]) / rmsWindowSamples / 2.0));
+    }
+        //for (int channel = 0; channel < 2; channel++)
+        //{
+        //    rmsValueToRemove = rmsQueues[channel].front();
+        //    rmsSquareSum -= rmsValueToRemove * rmsValueToRemove;
+        //    rmsQueues[channel].pop();
+        //    rmsValueToAdd = rmsMemoryBuffer[channel][rmsOffsetInSamples];
+        //    rmsQueues[channel].push(rmsValueToAdd);
+        //    rmsSquareSum += rmsValueToAdd * rmsValueToAdd;
+        //    rmsBuffer[channel].push_back(std::sqrt(rmsSquareSum / rmsWindowSamples / 2.0));
+        //}
+    
+    // If RMS window parameter decreased since last call to processBlock(), excessive old samples need to be erased.
+    //while (rmsMonoBuffers[0].size() > rmsWindowSamples)
+    //{
+    //    for (int channel = 0; channel < totalNumInputChannels; channel++)
+    //    {
+    //        rmsValueToRemove = rmsQueues[channel].front();
+    //        rmsSquareSum[channel] -= rmsValueToRemove * rmsValueToRemove;
+    //        rmsQueues[channel].pop();
+    //        //rmsMemoryBuffers[channel].pop_front();
+    //        rmsStereoBuffers[channel].pop_front();
+    //    }
+    //    for (int input = 0; input <= sidechainChannelsExist; input++)
+    //    {
+    //        rmsMonoBuffers[input].pop_front();
+    //    }
+    //}
+    while (rmsQueues[0].size() > rmsWindowSamples)
+        for (int channel = 0; channel < totalNumInputChannels; channel++)
+        {
+            rmsValueToRemove = rmsQueues[channel].front();
+            rmsSquareSum[channel] -= rmsValueToRemove * rmsValueToRemove;
+            rmsQueues[channel].pop();
+        }
+    //!!!!!DODAWAĆ WARTOŚCI DO QUEUE JAK JEST ZA MAŁO!!!!!????
+
     // If latency exceeds currently accumulated samples, buffer is cleared and returned, as there is not enough samples to begin processing yet.
-    if (memoryBuffer[0].size() <= currentLatencyInSamples)
+    if (mainInputBuffer[0].size() <= currentLatencyInSamples)
     {
         buffer.clear();
         return;
     }
+
+
     // Total amount of samples that are able to be processed (accumulated samples minus latency in samples).
-    int samplesToProcess = memoryBuffer[0].size() - currentLatencyInSamples;
-    // In case the latency was reduced since last call to processBlock, older samples are removed until samples count in memoryBuffer is equal to sum of samples in buffer and currentLatencyInSamples.
+    int samplesToProcess = mainInputBuffer[0].size() - currentLatencyInSamples;
+    // In case the latency was reduced since last call to processBlock, older samples are removed until samples count in mainInputBuffer is equal to sum of samples in buffer and currentLatencyInSamples.
     for (int sample = 0; sample < samplesToProcess - smpNum; sample++)
+    {
+        for (int channel = 0; channel < 2; channel++)
+        {
+            mainInputBuffer[channel].pop_front();
+            //rmsMemoryBuffer[channel].pop_front();
+            //rmsMemoryBuffer[channel + 2].pop_front();
+            rmsMonoBuffers[channel].pop_front();
+        }
         for (int channel = 0; channel < totalNumInputChannels; channel++)
-            memoryBuffer[channel].pop_front();
+        {
+            //rmsMemoryBuffers[channel].pop_front();
+            //rmsValueToRemove = rmsQueues[channel].front();
+            //rmsSquareSum[channel] -= rmsValueToRemove * rmsValueToRemove;
+            //rmsQueues[channel].pop();
+            rmsStereoBuffers[channel].pop_front();
+        }
+    }
+    //for (int sample = 0; sample < samplesToProcess + rmsOffsetInSamples - smpNum; sample++)
+    //{
+    //    for (int channel = 0; channel < totalNumInputChannels; channel++)
+    //    {
+    //        rmsMemoryBuffer[channel].pop_front();
+    //        rmsValueToRemove = rmsQueues[channel].front();
+    //        rmsSquareSum -= rmsValueToRemove * rmsValueToRemove;
+    //        rmsQueues[channel].pop();
+    //    }
+    //}
     // On the other hand, if samples count in memoryBuffer is smaller than sum of samples in buffer and currentLatencyInSamples
     // (this is the case if this is the first processBlock call with enough samples to start processing), then 0's are used to fill the beginning of the buffer.
-    int startingSample = smpNum - memoryBuffer[0].size() + currentLatencyInSamples;
+    int startingSample = smpNum - mainInputBuffer[0].size() + currentLatencyInSamples;
     jassert(startingSample >= 0);
     for (int sample = 0; sample < startingSample; sample++)
         for (int channel = 0; channel < totalNumInputChannels; channel++)
@@ -392,18 +541,18 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
     //            rmsQueues[keySignalChannel].push(memoryBuffer[keySignalChannel + channelOffset].front());
     //}
 
-    // If sidechain was enabled/disabled since the previous call to processBlock, rms queues are replaced with 0's, since values inside them are no longer relevant.
-    if (keySignalSwitched)
-    {
-        keySignalSwitched = false;
-        rmsSquareSum = 0;
-        for (int channel = 0; channel < 2; channel++)
-        {
-            rmsQueues[channel] = std::queue<float>();
-            for (int sample = 0; sample < rmsWindowSamples; sample++)
-                rmsQueues[channel].push(0);
-        }
-    }
+    //// If sidechain was enabled/disabled since the previous call to processBlock, rms queues are replaced with 0's, since values inside them are no longer relevant.
+    //if (keySignalSwitched)
+    //{
+    //    keySignalSwitched = false;
+    //    rmsSquareSum = 0;
+    //    for (int channel = 0; channel < 2; channel++)
+    //    {
+    //        rmsQueues[channel] = std::queue<float>();
+    //        for (int sample = 0; sample < rmsWindowSamples; sample++)
+    //            rmsQueues[channel].push(0);
+    //    }
+    //}
 
     for (int smp = startingSample; smp < smpNum; ++smp)
     {
@@ -414,45 +563,57 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         //}
         for (int channel = 0; channel < 2; ++channel)
         {
-            float rmsValueToRemove, rmsValueToAdd;
-            rmsValueToRemove = rmsQueues[channel].front();
-            rmsSquareSum -= rmsValueToRemove * rmsValueToRemove;
-            rmsQueues[channel].pop();
+            //float rmsValueToRemove, rmsValueToAdd;
+            //rmsValueToRemove = rmsQueues[channel].front();
+            //rmsSquareSum -= rmsValueToRemove * rmsValueToRemove;
+            //rmsQueues[channel].pop();
+
             //channelsData[channel + 2][smp] *= sidechainGainLin;
-            s[channel] = memoryBuffer[channel].front();
+            s[channel] = mainInputBuffer[channel].front();
+            //s[channel] = mainInputBuffer[channel].front();
             sdb[channel] = Comp4AmplitudeToDecibels(s[channel]);
             //int rmsNewValueIndex = smp + rmsOffsetInSamples;
             //sdbkey = sidechainEnable ? Comp4AmplitudeToDecibels(channelsData[channel + 2][smp]) : sdb;
-            if (sidechainEnable)
-            {
-                //sdbkey = Comp4AmplitudeToDecibels(memoryBuffer[channel + 2].front());
-                //int tmp = smp + rmsOffset;
-                //rmsQueues[channel].push(memoryBuffer[channel + 2][tmp]);
-                //rmsValueToAdd = memoryBuffer[channel + 2][rmsNewValueIndex];
-                if (sidechainChannelsExist) rmsValueToAdd = memoryBuffer[channel + 2][rmsOffsetInSamples];
-                else rmsValueToAdd = 0;
-                // rmsQueues[channel].push(rmsValueToAdd);
-                // if (smp + rmsOffset < smpNum) rmsQueues[channel].push(memoryBuffer[channel + 2][smp + rmsOffset]);
-                // else rmsQueues[channel].push(memoryBuffer[channel + 2][smpNum * 2 - smp - rmsOffset]);
-            }
-            else
-            {
-                //sdbkey = sdb;
-                //rmsValueToAdd = memoryBuffer[channel][rmsNewValueIndex];
-                rmsValueToAdd = memoryBuffer[channel][rmsOffsetInSamples];
-                // rmsQueues[channel].push(rmsValueToAdd);
-                // if (smp + rmsOffset < smpNum) rmsQueues[channel].push(memoryBuffer[channel][smp + rmsOffset]);
-                // else rmsQueues[channel].push(memoryBuffer[channel][smpNum * 2 - smp - rmsOffset]);
-            }
-            rmsQueues[channel].push(rmsValueToAdd);
-            rmsSquareSum += rmsValueToAdd * rmsValueToAdd;
+
+            //if (sidechainEnable)
+            //{
+            //    //sdbkey = Comp4AmplitudeToDecibels(memoryBuffer[channel + 2].front());
+            //    //int tmp = smp + rmsOffset;
+            //    //rmsQueues[channel].push(memoryBuffer[channel + 2][tmp]);
+            //    //rmsValueToAdd = memoryBuffer[channel + 2][rmsNewValueIndex];
+            //    if (sidechainChannelsExist) rmsValueToAdd = mainInputBuffer[channel + 2][rmsOffsetInSamples];
+            //    else rmsValueToAdd = 0;
+            //    // rmsQueues[channel].push(rmsValueToAdd);
+            //    // if (smp + rmsOffset < smpNum) rmsQueues[channel].push(memoryBuffer[channel + 2][smp + rmsOffset]);
+            //    // else rmsQueues[channel].push(memoryBuffer[channel + 2][smpNum * 2 - smp - rmsOffset]);
+            //}
+            //else
+            //{
+            //    //sdbkey = sdb;
+            //    //rmsValueToAdd = memoryBuffer[channel][rmsNewValueIndex];
+            //    rmsValueToAdd = mainInputBuffer[channel][rmsOffsetInSamples];
+            //    // rmsQueues[channel].push(rmsValueToAdd);
+            //    // if (smp + rmsOffset < smpNum) rmsQueues[channel].push(memoryBuffer[channel][smp + rmsOffset]);
+            //    // else rmsQueues[channel].push(memoryBuffer[channel][smpNum * 2 - smp - rmsOffset]);
+            //}
+
+            //rmsQueues[channel].push(rmsValueToAdd);
+            //rmsSquareSum += rmsValueToAdd * rmsValueToAdd;
+
             //double sabs = sidechainEnable ? std::abs(channelsData[channel+2][smp]) : std::abs(*s);
             //double newValuedb = 0;
             //originalValues[channel] = s;
             //if (smp % 100 == 0) DBG(attackSamplesLeft);
-            sdbkeyrms = Comp4AmplitudeToDecibels(std::sqrt(rmsSquareSum / rmsWindowSamples / 2.0));
+
+            //sdbkeyrms = Comp4AmplitudeToDecibels(std::sqrt(rmsSquareSum / rmsWindowSamples / 2.0));
+            sdbkeyrms = Comp4AmplitudeToDecibels(rmsMonoBuffers[sidechainEnable && sidechainChannelsExist].front());
+            //if (!sidechainEnable || !sidechainChannelsExist) sdbkeyrms = Comp4AmplitudeToDecibels((rmsBuffer[0].front() + rmsBuffer[1].front() / 2.0));
+            //else sdbkeyrms = Comp4AmplitudeToDecibels((rmsBuffer[2].front() + rmsBuffer[3].front() / 2.0));
         }
         //sdbmean = Comp4AmplitudeToDecibels(std::sqrt(memoryBuffer[0].front() * memoryBuffer[0].front() + memoryBuffer[1].front() * memoryBuffer[1].front()));
+
+        for (int input = 0; input < 2; input++)
+            rmsMonoBuffers[input].pop_front();
 
         //if (ratio != 1.0 && thresh != 0.0 && !std::isinf(sdbmean))
         if (ratio != 1.0 && thresh != 0.0)
@@ -472,7 +633,6 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
                     //gainReduction = sdbmean - (bezierThresh + (sdbmean - bezierThresh) / bezierRatio);
                     gainReduction = sdbkeyrms - (bezierThresh + (sdbkeyrms - bezierThresh) / bezierRatio);
                     attackPhase = true;
-                    // !!!!!!!CZY PRZECHODZENIE Z BUFORA DO BUFORA NIE NOSI ZE SOBĄ ARTEFAKTÓW?!!!!!!!
                 }
                 else
                 {
@@ -681,14 +841,22 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
         // }
         for (int channel = 0; channel < 2; ++channel)
         {
+            //if (lookAhead > 0)
+            //    s[channel] = s[channel] >= 0 ? Comp4DecibelsToAmplitude(std::max(sdb[channel] - gainReduction), lookAheadValues[channel].f) : -1.0 * Comp4DecibelsToAmplitude(sdb[channel] - gainReduction);
+            //else
             s[channel] = s[channel] >= 0 ? Comp4DecibelsToAmplitude(sdb[channel] - gainReduction) : -1.0 * Comp4DecibelsToAmplitude(sdb[channel] - gainReduction);
             jassert(!std::isnan(s[channel]));
             if (pluginWindowOpen)
             {
                 //currentValues[channel].push_back(originalValues[channel]);
                 //jassert(memoryBuffer[channel].front() < 0.1);
-                currentValues[channel].push_back(memoryBuffer[channel].front());
-                if (sidechainChannelsExist) currentValues[channel + 2].push_back(memoryBuffer[channel + 2].front());
+                //currentValues[channel].push_back(mainInputBuffer[channel].front());
+                //if (sidechainChannelsExist) currentValues[channel + 2].push_back(mainInputBuffer[channel + 2].front());
+                //currentValues[channel + 4].push_back(s[channel]);
+                //currentValues[channel].push_back(mainInputBuffer[channel].front());
+                //if (sidechainChannelsExist) currentValues[channel + 2].push_back(mainInputBuffer[channel + 2].front());
+                currentValues[channel].push_back(rmsStereoBuffers[channel].front());
+                if (sidechainChannelsExist) currentValues[channel + 2].push_back(rmsStereoBuffers[channel + 2].front());
                 currentValues[channel + 4].push_back(s[channel]);
             }
 
@@ -717,17 +885,21 @@ void Comp4AudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::
             //channelsData[channel][smp] = !sidechainMuteInput * memoryBuffer[channel].front() + sidechainListen * memoryBuffer[channel + 2].front();
             if (sidechainChannelsExist)
             {
-                channelsData[channel][smp] = !sidechainMuteInput * s[channel] + sidechainListen * memoryBuffer[channel + 2].front();
-                memoryBuffer[channel].pop_front();
-                memoryBuffer[channel + 2].pop_front();
+                channelsData[channel][smp] = !sidechainMuteInput * s[channel] + sidechainListen * mainInputBuffer[channel + 2].front();
+                //mainInputBuffer[channel].pop_front();
             }
             else
             {
                 channelsData[channel][smp] = !sidechainMuteInput * s[channel];
-                memoryBuffer[channel].pop_front();
+                //mainInputBuffer[channel].pop_front();
             }
+            mainInputBuffer[channel].pop_front();
 
             //*s *= outputGainLin;
+        }
+        for (int channel = 0; channel < totalNumInputChannels; channel++)
+        {
+            rmsStereoBuffers[channel].pop_front();
         }
     }
 
@@ -1110,4 +1282,49 @@ void Comp4AudioProcessor::Comp4UpdateLatency(double newMinimalLatencyInSamples)
     if (newMinimalLatencyInSamples == minimalLatencyInSamples) return;
     minimalLatencyInSamples = newMinimalLatencyInSamples;
     Comp4UpdateLatencyCore();
+}
+//std::vector<float> Comp4GetLookAhead(std::deque<float> memoryBuffer[], int lookAheadSamples, double maxAttackGainPerSample)
+//{
+//
+//}
+void Comp4AudioProcessor::Comp4GetLookAhead()
+{
+    jassert(lookAheadSamples <= mainInputBuffer[0].size());
+    double lookRmsSquareSum = 0;
+    int channel = 0;
+    double prevValue = -std::numeric_limits<double>::infinity();
+    double currentValue = 0;
+    if (sidechainEnable) channel = 2;
+    if (lookAheadValues.empty())
+    {
+        for (int i = lookAheadSamples - 1; i > lookAheadSamples - 1 - rmsOffsetInSamples; i--)
+        {
+            //lookRmsSquareSum += memoryBuffer[channel][lookAheadSamples - i] * memoryBuffer[channel][lookAheadSamples - i] + memoryBuffer[channel + 1][lookAheadSamples - i] * memoryBuffer[channel + 1][lookAheadSamples - i];
+            lookRmsSquareSum += mainInputBuffer[channel][i] * mainInputBuffer[channel][i] + mainInputBuffer[channel + 1][i] * mainInputBuffer[channel + 1][i];
+        }
+        //for (int i = 0; i < lookAheadSamples; i++)
+        for (int i = lookAheadSamples - 1; i >= 0; i--)
+        {
+            lookRmsSquareSum += mainInputBuffer[channel][i] * mainInputBuffer[channel][i] + mainInputBuffer[channel + 1][i] * mainInputBuffer[channel + 1][i];
+            //if (i == lookAheadSamples - 1) lookAheadValues.push_back(std::sqrt(lookRmsSquareSum));
+            //else lookAheadValues.push_back(std::max(std::sqrt(lookRmsSquareSum), 
+            //lookAheadValues.push_back(std::max(prevValue - maxAttackGainPerSample, std::sqrt(lookRmsSquareSum / rmsWindowSamples / 2.0)));
+            currentValue = Comp4AmplitudeToDecibels(std::sqrt(lookRmsSquareSum / rmsWindowSamples / 2.0));
+            //if (prevValue - maxAttackGainPerSample > currentValue) currentValue = prevValue - maxAttackGainPerSample;
+            //currentValue = std::max(currentValue, prevValue - maxAttackGainPerSample);
+            if (prevValue - maxAttackGainPerSample > currentValue)
+            {
+                lookAheadValues.push_back(maxAttackGainPerSample);
+                currentValue = prevValue - maxAttackGainPerSample;
+            }
+            else lookAheadValues.push_back(0);
+            prevValue = currentValue;
+            //PRZEANALIZOWAĆ DLA DOWNWARD I EXPANDERÓW
+        }
+    }
+    else
+    {
+
+    }
+    //PRZEANALIZOWAĆ DLA ZMIENIAJĄCEGO SIĘ OPÓŹNIENIA
 }
